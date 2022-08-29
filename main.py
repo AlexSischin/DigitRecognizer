@@ -1,51 +1,76 @@
-import random
+import multiprocessing
+import statistics
 
+import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow as tf
 
 import ai
+from animation.trainfig import TrainFig
+from utils import iter_utils as iu
+from utils import zip_utils as zu
+from utils.time_utils import TimeLog
+
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+layer_sizes = (784, 16, 16, 10)
+chunk_size = 50
+
+queue_size = 2
+metrics_batch_size = 5
+train_animation_interval = 1000
+metrics_range = 50
 
 
-layer_sizes = (4, 4)
+def matrix_to_xv(m):
+    return np.array([d for r in m for d in r]) / 255
 
 
-def get_random_array(size):
-    return np.array([random.randint(0, 1) for v in range(size)])
+def digit_to_yv(d):
+    if not 0 <= d <= 9:
+        raise ValueError('Expected digit between 0 and 9')
+    y = np.zeros(shape=10)
+    y[d] = 1
+    return y
 
 
-def sample_func(input_vector: np.ndarray):
-    output = []
-    for i in input_vector:
-        output += [1 - i]
-    return np.array(output)
+def get_avg_components(list_of_vectors):
+    return [statistics.mean(e) for e in zip(*list_of_vectors)]
 
 
-def get_cost_vector(expected_result, actual_result):
-    return [(e - a) * (e - a) for e, a in list(zip(expected_result, actual_result))]
-
-
-def get_cost(ai_instance: ai.Ai, iterations):
-    cost = 0
-    for iteration in range(iterations):
-        input_vector = get_random_array(layer_sizes[0])
-        expected_result = sample_func(input_vector)
-        activations = ai_instance.feed(input_vector)
-        actual_result = activations[-1]
-        nudge_vector = expected_result - actual_result
-        cost_vector = get_cost_vector(expected_result, actual_result)
-        cost_sum = sum(cost_vector)
-        print(f'input_vector = \t\t{input_vector}')
-        print(f'expected_result = \t{expected_result}')
-        print(f'actual_result = \t{["%0.2f" % i for i in actual_result]}')
-        print(f'cost_vector = \t\t{["%0.2f" % i for i in cost_vector]}')
-        print(f'cost_sum = \t\t\t{cost_sum}\n')
-        cost += cost_sum
-    return cost / iterations
+def train(queue, batch_size, ai_instance: ai.Ai, xs, ys, c_size, c_count=None):
+    x_chunks = iu.get_array_chunks(xs, c_size, c_count)
+    y_chunks = iu.get_array_chunks(ys, c_size, c_count)
+    xy_chunks = zu.zip2(x_chunks, y_chunks)
+    xy_chunks_chunks = iu.get_chunks(xy_chunks, batch_size)
+    for xy_chunks_chunk in xy_chunks_chunks:
+        with TimeLog('TRAIN'):
+            metrics_buff = []
+            for x_chunk, y_chunk in xy_chunks_chunk:
+                fxc = [matrix_to_xv(x) for x in x_chunk]
+                fya = [digit_to_yv(y) for y in y_chunk]
+                metric = ai_instance.train(fxc, fya)
+                metrics_buff.append(metric)
+            queue.put_nowait(metrics_buff.copy())
+    print('END TRAIN')
 
 
 def main():
-    ai_instance = ai.create_random(layer_sizes)
-    cost = get_cost(ai_instance, 5)
-    print(f'Cost:\t{cost}')
+    ai_model = ai.init_model(layer_sizes)
+
+    queue = multiprocessing.Queue(maxsize=queue_size)
+    train_args = (queue, metrics_batch_size, ai_model, x_train, y_train, chunk_size)
+    train_process = multiprocessing.Process(None, train, args=train_args, daemon=True)
+    train_process.start()
+
+    train_fig = TrainFig(queue, animation_interval=train_animation_interval, metrics_range=metrics_range)
+    _ta = train_fig.animation
+
+    plt.tight_layout()
+    plt.show()
+    plt.close('all')
+
+    train_fig.fig.savefig('charts/temp.png')
+    # test(ai_model, x_test, y_test)
 
 
 if __name__ == '__main__':
