@@ -11,7 +11,6 @@ class MetricsDispatchWorkerThread(QThread):
         self._metrics_queue = metrics_queue
         self._metrics_buff = metrics_buff
 
-    # TODO precalculate metrics and keep only valuable data
     def run(self) -> None:
         self.started.emit()
         while True:

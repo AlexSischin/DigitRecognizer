@@ -6,7 +6,7 @@ import numpy as np
 import pyqtgraph as pg
 import tensorflow as tf
 from PyQt5 import QtCore
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QFile, QTextStream
 from PyQt5.QtWidgets import QApplication
 
 import ai
@@ -14,6 +14,10 @@ from utils import iter_utils as iu
 from utils import zip_utils as zu
 from utils.time_utils import TimeLog
 from ui.main_window import MainWindow
+import qrc_resources
+
+# To save from imports optimization by IDEs
+qrc_resources = qrc_resources
 
 (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
 layer_sizes = (784, 16, 16, 10)
@@ -60,8 +64,15 @@ def train(queue, queue_batch_size, ai_instance: ai.Ai, xs, ys, c_size, c_count=N
 def create_app():
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
-    app = pg.mkQApp("Plotting Example")
+    app = pg.mkQApp("AI trainer")
     app.setAttribute(Qt.AA_UseHighDpiPixmaps)
+
+    # set stylesheet
+    file = QFile(":dark-theme")
+    file.open(QFile.ReadOnly | QFile.Text)
+    stream = QTextStream(file)
+    app.setStyleSheet(stream.readAll())
+
     return app
 
 
