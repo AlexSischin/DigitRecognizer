@@ -1,16 +1,19 @@
 import math
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QGridLayout, QWidget
 
 import ai
 from ui.plot.correlation import CorrelationPlot
 from ui.plot.cost import CostPlot
 from ui.plot.distribution import DistributionPlot
+from ui.plot.gradient_length_plot import GradientLengthPlot
 from ui.plot.recent_cost import RecentCostPlot
 
 
 class CentralWidget(QWidget):
+    plot_widgets_full = pyqtSignal()
+    plot_widgets_available = pyqtSignal()
 
     def __init__(self, metrics_buff: list[ai.TrainMetric], train_data_chunk_size: int, parent=None):
         super().__init__(parent)
@@ -53,9 +56,16 @@ class CentralWidget(QWidget):
         self._distribution_plot = DistributionPlot()
         self._optional_plots.append(self._distribution_plot)
 
+        # Gradient length
+        self._gradient_length_plot = GradientLengthPlot()
+        self._optional_plots.append(self._gradient_length_plot)
+
         for p in self._optional_plots:
             p.hide()
             p.enabled = False
+
+        self._plot_widgets_available = (self._row_count - 1) * self._column_count
+        self._plot_widgets_active = 0
 
     def update_region(self):
         left_data_bound, right_data_bound = self._cost_plot.lr.getRegion()
@@ -66,9 +76,12 @@ class CentralWidget(QWidget):
         region = (left_metrics_bound, right_metrics_bound)
         if region != self._last_region:
             self._last_region = region
+            data_used = [i * self._train_data_chunk_size for i, _ in enumerate(self._metrics_buff)][
+                        left_metrics_bound:right_metrics_bound]
             region_metrics = self._metrics_buff[left_metrics_bound:right_metrics_bound]
             self._correlation_plot.set_data(region_metrics)
             self._distribution_plot.set_data(region_metrics)
+            self._gradient_length_plot.set_data(data_used, region_metrics)
 
     def update_cost_plot(self):
         data_used = [i * self._train_data_chunk_size for i, _ in enumerate(self._metrics_buff)]
@@ -86,11 +99,23 @@ class CentralWidget(QWidget):
             pw.hide()
             if pw.enabled:
                 r, c = divmod(counter + self._column_count, self._column_count)
+                if r >= self._row_count or c >= self._column_count:
+                    raise ValueError('Out of grid bounds')
                 self._layout.addWidget(pw, r, c)
                 pw.show()
                 counter += 1
 
     def _toggle_plot(self, plot, checked):
+        if plot.enabled == checked:
+            raise ValueError(f'Plot widget is already in the desired state')
+        if checked:
+            self._plot_widgets_active += 1
+            if self._plot_widgets_active >= self._plot_widgets_available:
+                self.plot_widgets_full.emit()
+        else:
+            if self._plot_widgets_active == self._plot_widgets_available:
+                self.plot_widgets_available.emit()
+            self._plot_widgets_active -= 1
         plot.enabled = checked
         self.rearrange_plots()
 
@@ -102,3 +127,6 @@ class CentralWidget(QWidget):
 
     def toggle_distribution_plot(self, checked):
         self._toggle_plot(self._distribution_plot, checked)
+
+    def toggle_gradient_length_plot(self, checked):
+        self._toggle_plot(self._gradient_length_plot, checked)

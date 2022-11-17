@@ -64,6 +64,10 @@ class MainWindow(QMainWindow):
         self._refresh_action.setToolTip(refresh_tip)
         self._refresh_action.triggered.connect(self.update_costs)
 
+        self._plot_buttons = []
+        self._central_widget.plot_widgets_full.connect(self.disable_inactive_plot_buttons)
+        self._central_widget.plot_widgets_available.connect(self.enable_inactive_plot_buttons)
+
         # Toggle distribution
         toggle_recent_cost_icon = QIcon(":recent-cost-plot-icon")
         toggle_recent_cost_text = '&Recent cost plot'
@@ -75,7 +79,7 @@ class MainWindow(QMainWindow):
         self._toggle_recent_cost_button.setStatusTip(toggle_recent_cost_tip)
         self._toggle_recent_cost_button.setToolTip(toggle_recent_cost_tip)
         self._toggle_recent_cost_button.toggled.connect(self.toggle_recent_cost_plot)
-        self._toggle_recent_cost_button.toggle()
+        self._plot_buttons.append(self._toggle_recent_cost_button)
 
         # Toggle correlation
         toggle_correlation_icon = QIcon(":correlation-plot-icon")
@@ -88,7 +92,7 @@ class MainWindow(QMainWindow):
         self._toggle_correlation_button.setStatusTip(toggle_correlation_tip)
         self._toggle_correlation_button.setToolTip(toggle_correlation_tip)
         self._toggle_correlation_button.toggled.connect(self.toggle_correlation_plot)
-        self._toggle_correlation_button.toggle()
+        self._plot_buttons.append(self._toggle_correlation_button)
 
         # Toggle distribution
         toggle_distribution_icon = QIcon(":distribution-plot-icon")
@@ -101,6 +105,23 @@ class MainWindow(QMainWindow):
         self._toggle_distribution_button.setStatusTip(toggle_distribution_tip)
         self._toggle_distribution_button.setToolTip(toggle_distribution_tip)
         self._toggle_distribution_button.toggled.connect(self.toggle_distribution_plot)
+        self._plot_buttons.append(self._toggle_distribution_button)
+
+        # Toggle gradient length
+        toggle_gradient_length_icon = QIcon(":gradient-length-plot-icon")
+        toggle_gradient_length_text = '&Gradient length plot'
+        toggle_gradient_length_tip = 'Toggle gradient length plot'
+        self._toggle_gradient_length_button = QToolButton(self)
+        self._toggle_gradient_length_button.setIcon(toggle_gradient_length_icon)
+        self._toggle_gradient_length_button.setText(toggle_gradient_length_text)
+        self._toggle_gradient_length_button.setCheckable(True)
+        self._toggle_gradient_length_button.setStatusTip(toggle_gradient_length_tip)
+        self._toggle_gradient_length_button.setToolTip(toggle_gradient_length_tip)
+        self._toggle_gradient_length_button.toggled.connect(self.toggle_gradient_length_plot)
+        self._plot_buttons.append(self._toggle_gradient_length_button)
+
+        self._toggle_recent_cost_button.toggle()
+        self._toggle_correlation_button.toggle()
         self._toggle_distribution_button.toggle()
 
     def _init_toolbar(self):
@@ -113,6 +134,7 @@ class MainWindow(QMainWindow):
         self._main_toolbar.addWidget(self._toggle_recent_cost_button)
         self._main_toolbar.addWidget(self._toggle_correlation_button)
         self._main_toolbar.addWidget(self._toggle_distribution_button)
+        self._main_toolbar.addWidget(self._toggle_gradient_length_button)
 
     def _init_statusbar(self):
         self._statusbar = self.statusBar()
@@ -133,6 +155,19 @@ class MainWindow(QMainWindow):
 
     def toggle_distribution_plot(self, checked):
         self._central_widget.toggle_distribution_plot(checked)
+
+    def toggle_gradient_length_plot(self, checked):
+        self._central_widget.toggle_gradient_length_plot(checked)
+
+    def disable_inactive_plot_buttons(self):
+        for b in self._plot_buttons:
+            if not b.isChecked():
+                b.setDisabled(True)
+
+    def enable_inactive_plot_buttons(self):
+        for b in self._plot_buttons:
+            if not b.isChecked():
+                b.setDisabled(False)
 
     def set_train_running_status(self):
         self._status_widget.setText('Running train')

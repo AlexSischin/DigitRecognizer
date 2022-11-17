@@ -5,6 +5,7 @@
     <file alias="correlation-plot-icon">resources/icon/chart-scatter.svg</file>
     <file alias="distribution-plot-icon">resources/icon/stats.svg</file>
     <file alias="recent-cost-plot-icon">resources/icon/chart-line-up.svg</file>
+    <file alias="gradient-length-plot-icon">resources/icon/chart-area.svg</file>
 
 <!--    Theme-->
     <file>resources/theme/dark-green/ads_close.svg</file>
