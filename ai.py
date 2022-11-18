@@ -1,6 +1,5 @@
 import math
 from dataclasses import dataclass
-from typing import Sized
 
 import numpy as np
 
@@ -72,6 +71,7 @@ class TrainMetric:
     b_gradient: list[np.ndarray]
     gradient_len: float
     costs: list[np.ndarray]
+    cost: float
     inputs: list[np.ndarray]
     outputs: list[np.ndarray]
     expected: list[np.ndarray]
@@ -80,7 +80,7 @@ class TrainMetric:
 def square_mean_costs(costs: list[np.ndarray]) -> np.ndarray:
     costs_array = np.array(costs)
     squared_costs = np.square(costs_array)
-    return np.mean(squared_costs, axis=0)
+    return np.mean(np.sum(squared_costs, axis=1))
 
 
 def generate_weights_and_biases(layer_sizes):
@@ -105,7 +105,7 @@ class Ai:
     def feed(self, x: np.ndarray) -> np.ndarray:
         return self._feed(x)[1][-1]
 
-    def train(self, x_vectors: list[np.ndarray], y_vectors: list[np.ndarray]) -> TrainMetric:
+    def train(self, x_vectors: list[np.ndarray], y_vectors: list[np.ndarray], patch_gradient=True) -> TrainMetric:
         w_gradient_sum = [np.zeros(w.shape) for w in self.w]
         b_gradient_sum = [np.zeros(b.shape) for b in self.b]
         costs = []
@@ -120,17 +120,22 @@ class Ai:
         n = len(x_vectors)
         w_gradient = [w / n for w in w_gradient_sum]
         b_gradient = [b / n for b in b_gradient_sum]
+        cost = square_mean_costs(costs)
         gradient_len = math.sqrt(sum([np.sum(gc ** 2) for gc in w_gradient + b_gradient]))
-        self._patch(gradient_len, w_gradient, b_gradient)
+        gradient_coefficient = 1 / gradient_len if patch_gradient else 1
+        self._patch(w_gradient, b_gradient, gradient_len, gradient_coefficient)
         return TrainMetric(
             w_gradient=w_gradient, b_gradient=b_gradient, gradient_len=gradient_len,
-            costs=costs, inputs=x_vectors, outputs=outputs, expected=y_vectors
+            costs=costs, cost=cost, inputs=x_vectors, outputs=outputs, expected=y_vectors
         )
 
-    def _patch(self, gradient_len: float, w_gradient: list[np.ndarray], b_gradient: list[np.ndarray]):
-        if gradient_len != 0:
-            self.w = [w - wd / gradient_len for w, wd in zp.zip2(self.w, w_gradient)]
-            self.b = [b - bd / gradient_len for b, bd in zp.zip2(self.b, b_gradient)]
+    def _patch(self, w_gradient: list[np.ndarray], b_gradient: list[np.ndarray], gradient_len, gradient_coefficient):
+        if gradient_len == 0:
+            return
+        if gradient_coefficient is None:
+            gradient_coefficient = 1 / gradient_len
+        self.w = [w - wd * gradient_coefficient for w, wd in zp.zip2(self.w, w_gradient)]
+        self.b = [b - bd * gradient_coefficient for b, bd in zp.zip2(self.b, b_gradient)]
 
     def _feed(self, x: np.ndarray) -> tuple[list[np.ndarray], list[np.ndarray]]:
         if not all(0 <= xi <= 1 for xi in x):

@@ -5,12 +5,6 @@ from ui.metrics_dispatcher import TrainMetric
 from ui.plot.base_plot import BasePlot
 
 
-def square_mean_costs(costs: list[np.ndarray]) -> np.ndarray:
-    costs_array = np.array(costs)
-    squared_costs = np.square(costs_array)
-    return np.mean(squared_costs, axis=0)
-
-
 class CostPlot(BasePlot):
     def __init__(self) -> None:
         super().__init__()
@@ -30,7 +24,7 @@ class CostPlot(BasePlot):
         self.addItem(self.lr)
 
     def set_data(self, metrics: list[TrainMetric]):
-        nodes = [(m.data_used, sum(square_mean_costs(m.costs))) for m in metrics]
+        nodes = [(m.data_used, m.cost) for m in metrics]
         self.curve.setData(np.array(nodes))
         if metrics:
             self.lr.setBounds((metrics[0].data_used, metrics[-1].data_used))

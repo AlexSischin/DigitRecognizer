@@ -12,6 +12,7 @@ class TrainMetric:
     b_gradient: list[np.ndarray]
     gradient_len: float
     costs: list[np.ndarray]
+    cost: float
     inputs: list[np.ndarray]
     outputs: list[np.ndarray]
     expected: list[np.ndarray]
@@ -37,11 +38,12 @@ class MetricsDispatchWorkerThread(QThread):
             if metrics_batch:
                 extended_metrics_batch = []
                 for metric in metrics_batch:
-                    extended_metric = TrainMetric(
-                        metric.w_gradient, metric.b_gradient, metric.gradient_len, metric.costs,
-                        metric.inputs, metric.outputs, metric.expected, self._metrics_used
-                    )
                     self._metrics_used += len(metric.inputs)
+                    extended_metric = TrainMetric(
+                        w_gradient=metric.w_gradient, b_gradient=metric.b_gradient, gradient_len=metric.gradient_len,
+                        costs=metric.costs, cost=metric.cost, inputs=metric.inputs, outputs=metric.outputs,
+                        expected=metric.expected, data_used=self._metrics_used
+                    )
                     extended_metrics_batch.append(extended_metric)
                 self._metrics_buff.extend(extended_metrics_batch)
                 self.updated.emit()
