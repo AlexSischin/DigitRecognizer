@@ -1,7 +1,7 @@
 import numpy as np
 import pyqtgraph as pg
 
-import ai
+from ui.metrics_dispatcher import TrainMetric
 from ui.plot.base_plot import BasePlot
 
 
@@ -12,9 +12,8 @@ def square_mean_costs(costs: list[np.ndarray]) -> np.ndarray:
 
 
 class CostPlot(BasePlot):
-    def __init__(self, train_data_chunk_size: int) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._train_data_chunk_size = train_data_chunk_size
 
         self.setStyleSheet("border: 1px solid black;")
         self.setTitle("Cost by train data")
@@ -25,17 +24,18 @@ class CostPlot(BasePlot):
         self.data = np.random.normal(size=(10, 1000))
         self.showGrid(x=True, y=True)
 
-        self.lr = pg.LinearRegionItem([0, 5 * self._train_data_chunk_size])
+        self.lr = pg.LinearRegionItem((0, 0))
         self.lr.setZValue(-10)
         self.lr.hide()
         self.addItem(self.lr)
 
-    def set_data(self, data_used: list[int], metrics: list[ai.TrainMetric]):
-        costs = [sum(square_mean_costs(m.costs)) for m in metrics]
-        nodes = np.array([data_used, costs]).transpose()
-        self.curve.setData(nodes)
-        if data_used:
-            self.lr.setBounds((0, data_used[-1]))
-            self.lr.show()
+    def set_data(self, metrics: list[TrainMetric]):
+        nodes = [(m.data_used, sum(square_mean_costs(m.costs))) for m in metrics]
+        self.curve.setData(np.array(nodes))
+        if metrics:
+            self.lr.setBounds((metrics[0].data_used, metrics[-1].data_used))
+            if not self.lr.isVisible():
+                self.lr.show()
+                self.lr.setRegion((metrics[0].data_used, metrics[min(5, len(metrics) - 1)].data_used))
         else:
             self.lr.hide()

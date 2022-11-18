@@ -10,11 +10,11 @@ from PyQt5.QtCore import Qt, QFile, QTextStream
 from PyQt5.QtWidgets import QApplication
 
 import ai
+import qrc_resources
+from ui.main_window import MainWindow
 from utils import iter_utils as iu
 from utils import zip_utils as zu
 from utils.time_utils import TimeLog
-from ui.main_window import MainWindow
-import qrc_resources
 
 # To save from imports optimization by IDEs
 qrc_resources = qrc_resources
@@ -80,10 +80,10 @@ def main():
     queue = mp.Queue(maxsize=metrics_queue_size)
 
     app = create_app()
-    window = MainWindow(queue, train_data_chunk_size)
+    window = MainWindow(queue)
     window.show()
 
-    ai_model = ai.init_model(layer_sizes)
+    ai_model = ai.Ai(layer_sizes)
     train_args = (queue, metrics_queue_batch_size, ai_model, x_train, y_train, train_data_chunk_size)
     train_process = mp.Process(target=train, args=train_args, daemon=True)
     train_process.start()

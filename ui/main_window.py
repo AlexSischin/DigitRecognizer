@@ -1,10 +1,7 @@
-import queue
-
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QKeySequence
-from PyQt5.QtWidgets import QMainWindow, QToolBar, QAction, QLabel, QStatusBar, QToolButton
+from PyQt5.QtWidgets import QMainWindow, QToolBar, QAction, QLabel, QToolButton
 
-import ai
 import qrc_resources
 from ui.central_widget import CentralWidget
 from ui.metrics_dispatcher import MetricsDispatchWorkerThread
@@ -14,20 +11,10 @@ qrc_resources = qrc_resources
 
 
 class MainWindow(QMainWindow):
-    _queue:                     queue.Queue
-    _metrics_buff:              list[ai.TrainMetric]
-    train_data_chunk_size:      int
-    _metrics_dispatcher:        MetricsDispatchWorkerThread
-    _central_widget:            CentralWidget
-    _refresh_action:            QAction
-    _main_toolbar:              QToolBar
-    _statusbar:                 QStatusBar
-    _status_widget:             QLabel
 
-    def __init__(self, metrics_queue, train_data_chunk_size: int, parent=None):
+    def __init__(self, metrics_queue, parent=None):
         super().__init__(parent)
         self._queue = metrics_queue
-        self._train_data_chunk_size = train_data_chunk_size
         self._metrics_buff = []
 
         self.setWindowTitle('AI trainer')
@@ -50,7 +37,7 @@ class MainWindow(QMainWindow):
 
     def _init_widgets(self):
         # Plots
-        self._central_widget = CentralWidget(self._metrics_buff, self._train_data_chunk_size, self)
+        self._central_widget = CentralWidget(self._metrics_buff, self)
         self.setCentralWidget(self._central_widget)
 
     def _init_actions(self):

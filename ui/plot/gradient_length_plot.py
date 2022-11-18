@@ -1,6 +1,6 @@
 import numpy as np
 
-import ai
+from ui.metrics_dispatcher import TrainMetric
 from ui.plot.base_plot import BasePlot
 
 
@@ -17,7 +17,6 @@ class GradientLengthPlot(BasePlot):
         self.data = np.random.normal(size=(10, 1000))
         self.showGrid(x=True, y=True)
 
-    def set_data(self, data_used: list[int], metrics: list[ai.TrainMetric]):
-        g_lengths = [m.gradient_len for m in metrics]
-        nodes = np.array([data_used, g_lengths]).transpose()
-        self.curve.setData(nodes)
+    def set_data(self, metrics: list[TrainMetric]):
+        nodes = [(m.data_used, m.gradient_len) for m in metrics]
+        self.curve.setData(np.array(nodes))

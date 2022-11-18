@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from typing import Sized
 
 import numpy as np
 
@@ -82,8 +83,21 @@ def square_mean_costs(costs: list[np.ndarray]) -> np.ndarray:
     return np.mean(squared_costs, axis=0)
 
 
+def generate_weights_and_biases(layer_sizes):
+    if len(layer_sizes) < 2:
+        raise ValueError('Expected 2 or more layers')
+    biases = []
+    weights = []
+    for layer_size, prev_layer_size in zip(layer_sizes[1:], layer_sizes):
+        biases += [np.random.random_sample(size=layer_size) * 1 - 0.5]
+        weights += [np.random.random_sample(size=(layer_size, prev_layer_size)) * 1 - 0.5]
+    return weights, biases
+
+
 class Ai:
-    def __init__(self, weights: list[np.ndarray], biases: list[np.ndarray]) -> None:
+    def __init__(self, layer_sizes=None, weights=None, biases=None) -> None:
+        if layer_sizes:
+            weights, biases = generate_weights_and_biases(layer_sizes)
         validate_brain(weights, biases)
         self.w = weights
         self.b = biases
@@ -146,13 +160,3 @@ class Ai:
 
         return w_derivatives, b_derivatives
 
-
-def init_model(layer_sizes) -> Ai:
-    if len(layer_sizes) < 2:
-        raise ValueError('Expected 2 or more layers')
-    biases = []
-    weights = []
-    for layer_size, prev_layer_size in zip(layer_sizes[1:], layer_sizes):
-        biases += [np.random.random_sample(size=layer_size) * 1 - 0.5]
-        weights += [np.random.random_sample(size=(layer_size, prev_layer_size)) * 1 - 0.5]
-    return Ai(weights, biases)
