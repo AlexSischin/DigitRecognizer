@@ -19,9 +19,9 @@ qrc_resources = qrc_resources
 
 (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
 layer_sizes = (784, 16, 16, 10)
-careful_learn_threshold = .0
+careful_learn_threshold = .1
 train_data_chunk_size = 50
-careful_train_data_chunk_size = 500
+careful_train_data_chunk_size = 250
 
 metrics_queue_size = 3
 metrics_queue_batch_size = 5
@@ -45,7 +45,8 @@ def get_avg_components(list_of_vectors):
 
 def train(queue, queue_batch_size, ai_instance: ai.Ai, xs, ys, cl_threshold, c_size, cl_c_size=None):
     last_costs = []
-    last_costs_size = 3
+    last_costs_size = 10
+    last_costs_cl_threshold = 5
     metrics_batch = []
     xy_chunk = []
     careful_train = False
@@ -65,7 +66,7 @@ def train(queue, queue_batch_size, ai_instance: ai.Ai, xs, ys, cl_threshold, c_s
             last_costs.append(metric.cost)
             if len(last_costs) >= last_costs_size:
                 last_costs.pop(0)
-            careful_train = any([c < cl_threshold for c in last_costs])
+            careful_train = len([1 for c in last_costs if c < cl_threshold]) >= last_costs_cl_threshold
 
             if len(metrics_batch) >= queue_batch_size:
                 queue.put_nowait(metrics_batch)

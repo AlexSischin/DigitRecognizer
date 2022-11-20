@@ -39,6 +39,7 @@ class CentralWidget(QWidget):
         # All costs
         self._cost_plot = CostPlot()
         self._cost_plot.lr.sigRegionChanged.connect(self.update_region)
+        self._cost_plot.sigSpotSelected.connect(self.select_spot)
         self._layout.addWidget(self._cost_plot, 0, 0, 1, 3)
 
         # Recent costs
@@ -81,6 +82,10 @@ class CentralWidget(QWidget):
     def update_metrics(self):
         recent_metrics = self._metrics_buff[-50:]
         self._recent_cost_plot.set_data(recent_metrics)
+
+    def select_spot(self, data_used):
+        metric = [m for m in self._metrics_buff if m.data_used == data_used][0]
+        print(f'Selected metric: {(metric.data_used, metric.cost)}')
 
     def rearrange_plots(self):
         counter = 0

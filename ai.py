@@ -67,6 +67,8 @@ def calc_next_activation_derivatives(n: int, n_next: int, z_der: np.ndarray, wei
 
 @dataclass(frozen=True)
 class TrainMetric:
+    w: list[np.ndarray]
+    b: list[np.ndarray]
     w_gradient: list[np.ndarray]
     b_gradient: list[np.ndarray]
     gradient_len: float
@@ -125,7 +127,7 @@ class Ai:
         gradient_coefficient = 1 / gradient_len if patch_gradient else 1
         self._patch(w_gradient, b_gradient, gradient_len, gradient_coefficient)
         return TrainMetric(
-            w_gradient=w_gradient, b_gradient=b_gradient, gradient_len=gradient_len,
+            w=self.w, b=self.b, w_gradient=w_gradient, b_gradient=b_gradient, gradient_len=gradient_len,
             costs=costs, cost=cost, inputs=x_vectors, outputs=outputs, expected=y_vectors
         )
 

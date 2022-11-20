@@ -8,6 +8,8 @@ import ai
 
 @dataclass(frozen=True)
 class TrainMetric:
+    w: list[np.ndarray]
+    b: list[np.ndarray]
     w_gradient: list[np.ndarray]
     b_gradient: list[np.ndarray]
     gradient_len: float
@@ -37,12 +39,12 @@ class MetricsDispatchWorkerThread(QThread):
             metrics_batch: list[ai.TrainMetric] = self._metrics_queue.get(block=True)
             if metrics_batch:
                 extended_metrics_batch = []
-                for metric in metrics_batch:
-                    self._metrics_used += len(metric.inputs)
+                for m in metrics_batch:
+                    self._metrics_used += len(m.inputs)
                     extended_metric = TrainMetric(
-                        w_gradient=metric.w_gradient, b_gradient=metric.b_gradient, gradient_len=metric.gradient_len,
-                        costs=metric.costs, cost=metric.cost, inputs=metric.inputs, outputs=metric.outputs,
-                        expected=metric.expected, data_used=self._metrics_used
+                        w=m.w, b=m.b, w_gradient=m.w_gradient, b_gradient=m.b_gradient, gradient_len=m.gradient_len,
+                        costs=m.costs, cost=m.cost, inputs=m.inputs, outputs=m.outputs, expected=m.expected,
+                        data_used=self._metrics_used
                     )
                     extended_metrics_batch.append(extended_metric)
                 self._metrics_buff.extend(extended_metrics_batch)
