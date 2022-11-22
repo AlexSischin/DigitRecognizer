@@ -82,13 +82,6 @@ def create_app():
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
     app = pg.mkQApp("AI trainer")
     app.setAttribute(Qt.AA_UseHighDpiPixmaps)
-
-    # set stylesheet
-    file = QFile(":dark-theme")
-    file.open(QFile.ReadOnly | QFile.Text)
-    stream = QTextStream(file)
-    app.setStyleSheet(stream.readAll())
-
     return app
 
 
