@@ -6,7 +6,7 @@ import numpy as np
 import pyqtgraph as pg
 import tensorflow as tf
 from PyQt5 import QtCore
-from PyQt5.QtCore import Qt, QFile, QTextStream
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
 import ai
@@ -17,7 +17,7 @@ from utils.zip_utils import zip2
 # To save from imports optimization by IDEs
 qrc_resources = qrc_resources
 
-(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+train_data, test_data = tf.keras.datasets.mnist.load_data()
 layer_sizes = (784, 16, 16, 10)
 careful_learn_threshold = .1
 train_data_chunk_size = 50
@@ -43,14 +43,15 @@ def get_avg_components(list_of_vectors):
     return [statistics.mean(e) for e in zip(*list_of_vectors)]
 
 
-def train(queue, queue_batch_size, ai_instance: ai.Ai, xs, ys, cl_threshold, c_size, cl_c_size=None):
+def train(queue, queue_batch_size, ai_instance: ai.Ai, data, cl_threshold, c_size, cl_c_size=None):
+    x_data, y_data = data
     last_costs = []
     last_costs_size = 10
     last_costs_cl_threshold = 5
     metrics_batch = []
     xy_chunk = []
     careful_train = False
-    for x, y in zip2(xs, ys):
+    for x, y in zip2(x_data, y_data):
         x_vector = matrix_to_xv(x)
         y_vector = digit_to_yv(y)
         xy_chunk.append((x_vector, y_vector))
@@ -89,11 +90,11 @@ def main():
     queue = mp.Queue(maxsize=metrics_queue_size)
 
     app = create_app()
-    window = MainWindow(queue)
+    window = MainWindow(queue, test_data)
     window.show()
 
     ai_model = ai.Ai(layer_sizes)
-    train_args = (queue, metrics_queue_batch_size, ai_model, x_train, y_train,
+    train_args = (queue, metrics_queue_batch_size, ai_model, train_data,
                   careful_learn_threshold, train_data_chunk_size, careful_train_data_chunk_size)
     train_process = mp.Process(target=train, args=train_args, daemon=True)
     train_process.start()

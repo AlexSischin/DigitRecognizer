@@ -1,6 +1,8 @@
+import numpy as np
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QGridLayout, QWidget
 
+import ai
 from ui.metrics_dispatcher import TrainMetric
 from ui.plot.correlation import CorrelationPlot
 from ui.plot.cost import CostPlot
@@ -10,8 +12,9 @@ from ui.plot.recent_cost import RecentCostPlot
 
 
 class CentralWidget(QWidget):
-    plot_widgets_full = pyqtSignal()
-    plot_widgets_available = pyqtSignal()
+    sigPlotWidgetsFull = pyqtSignal()
+    sigPlotWidgetsAvailable = pyqtSignal()
+    sigAiVersionSelected = pyqtSignal(int)
 
     def __init__(self, metrics_buff: list[TrainMetric], parent=None):
         super().__init__(parent)
@@ -39,7 +42,7 @@ class CentralWidget(QWidget):
         # All costs
         self._cost_plot = CostPlot()
         self._cost_plot.lr.sigRegionChanged.connect(self.update_region)
-        self._cost_plot.sigSpotSelected.connect(self.select_spot)
+        self._cost_plot.sigSpotSelected.connect(self._on_spot_selected)
         self._layout.addWidget(self._cost_plot, 0, 0, 1, 3)
 
         # Recent costs
@@ -83,9 +86,14 @@ class CentralWidget(QWidget):
         recent_metrics = self._metrics_buff[-50:]
         self._recent_cost_plot.set_data(recent_metrics)
 
-    def select_spot(self, data_used):
-        metric = [m for m in self._metrics_buff if m.data_used == data_used][0]
-        print(f'Selected metric: {(metric.data_used, metric.cost)}')
+    def get_ai_version(self, version_id: int) -> ai.Ai:
+        for m in self._metrics_buff:
+            if m.data_used == version_id:
+                return ai.Ai(weights=m.w, biases=m.b)
+        raise ValueError(f'Could not find a metric with data used (version id): {version_id}')
+
+    def _on_spot_selected(self, data_used):
+        self.sigAiVersionSelected.emit(int(data_used))
 
     def rearrange_plots(self):
         counter = 0
@@ -106,10 +114,10 @@ class CentralWidget(QWidget):
         if checked:
             self._plot_widgets_active += 1
             if self._plot_widgets_active >= self._plot_widgets_available:
-                self.plot_widgets_full.emit()
+                self.sigPlotWidgetsFull.emit()
         else:
             if self._plot_widgets_active == self._plot_widgets_available:
-                self.plot_widgets_available.emit()
+                self.sigPlotWidgetsAvailable.emit()
             self._plot_widgets_active -= 1
         plot.enabled = checked
         self.rearrange_plots()

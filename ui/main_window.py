@@ -1,3 +1,4 @@
+from PyQt5 import QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import QMainWindow, QToolBar, QAction, QLabel, QToolButton
@@ -5,6 +6,7 @@ from PyQt5.QtWidgets import QMainWindow, QToolBar, QAction, QLabel, QToolButton
 import qrc_resources
 from ui.central_widget import CentralWidget
 from ui.metrics_dispatcher import MetricsDispatchWorkerThread
+from ui.test.test_window import TestWindow
 
 # To save from imports optimization by IDEs
 qrc_resources = qrc_resources
@@ -12,10 +14,14 @@ qrc_resources = qrc_resources
 
 class MainWindow(QMainWindow):
 
-    def __init__(self, metrics_queue, parent=None):
-        super().__init__(parent)
+    def __init__(self, metrics_queue, test_data):
+        super().__init__()
         self._queue = metrics_queue
+        self._test_data = test_data
+
         self._metrics_buff = []
+        self._test_windows = []
+        self._selected_ai_version = None
 
         self.setWindowTitle('AI trainer')
         self.resize(1000, 600)
@@ -39,8 +45,20 @@ class MainWindow(QMainWindow):
         # Plots
         self._central_widget = CentralWidget(self._metrics_buff, self)
         self.setCentralWidget(self._central_widget)
+        self._central_widget.sigAiVersionSelected.connect(self.on_ai_version_selected)
 
     def _init_actions(self):
+        # Launch test window
+        test_icon = QIcon(":test-icon")
+        test_text = '&Run test'
+        test_tip = 'Run test'
+        self._test_action = QAction(test_icon, test_text, self)
+        self._test_action.setShortcuts((QKeySequence.Refresh, 'Ctrl+L'))
+        self._test_action.setStatusTip(test_tip)
+        self._test_action.setToolTip(test_tip)
+        self._test_action.triggered.connect(self.on_ai_test_run)
+        self._update_test_action_state()
+
         # Refresh cost plot
         refresh_icon = QIcon(":refresh-icon")
         refresh_text = '&Refresh costs'
@@ -52,8 +70,8 @@ class MainWindow(QMainWindow):
         self._refresh_action.triggered.connect(self.update_costs)
 
         self._plot_buttons = []
-        self._central_widget.plot_widgets_full.connect(self.disable_inactive_plot_buttons)
-        self._central_widget.plot_widgets_available.connect(self.enable_inactive_plot_buttons)
+        self._central_widget.sigPlotWidgetsFull.connect(self.disable_inactive_plot_buttons)
+        self._central_widget.sigPlotWidgetsAvailable.connect(self.enable_inactive_plot_buttons)
 
         # Toggle distribution
         toggle_recent_cost_icon = QIcon(":recent-cost-plot-icon")
@@ -107,6 +125,7 @@ class MainWindow(QMainWindow):
         self._toggle_gradient_length_button.toggled.connect(self.toggle_gradient_length_plot)
         self._plot_buttons.append(self._toggle_gradient_length_button)
 
+        # Toggle buttons
         self._toggle_recent_cost_button.toggle()
         self._toggle_correlation_button.toggle()
         self._toggle_distribution_button.toggle()
@@ -116,6 +135,9 @@ class MainWindow(QMainWindow):
         self._main_toolbar = QToolBar("Main toolbar", self)
         self._main_toolbar.setToolButtonStyle(Qt.ToolButtonIconOnly)
         self.addToolBar(Qt.LeftToolBarArea, self._main_toolbar)
+
+        self._main_toolbar.addAction(self._test_action)
+        self._main_toolbar.addSeparator()
         self._main_toolbar.addAction(self._refresh_action)
         self._main_toolbar.addSeparator()
         self._main_toolbar.addWidget(self._toggle_recent_cost_button)
@@ -127,6 +149,31 @@ class MainWindow(QMainWindow):
         self._statusbar = self.statusBar()
         self._status_widget = QLabel('Initializing')
         self._statusbar.addPermanentWidget(self._status_widget)
+
+    def on_ai_test_run(self):
+        ai_version = self._selected_ai_version
+        ai_instance = self._central_widget.get_ai_version(ai_version)
+
+        test_window = TestWindow(ai_version, ai_instance, f'AI v.{ai_version} test', self._test_data)
+        test_window.sigClosed.connect(self.on_test_window_close)
+        test_window.show()
+
+        self._test_windows.append(test_window)
+        self._update_test_action_state()
+
+    def on_test_window_close(self, window: TestWindow):
+        self._test_windows.remove(window)
+        self._update_test_action_state()
+
+    def on_ai_version_selected(self, version_id):
+        self._selected_ai_version = version_id
+        self._update_test_action_state()
+
+    def _update_test_action_state(self):
+        running_version_tests = [w.ai_version for w in self._test_windows]
+        enable_test_button = self._selected_ai_version \
+                             and self._selected_ai_version not in running_version_tests
+        self._test_action.setDisabled(not enable_test_button)
 
     def update_costs(self):
         self._central_widget.update_cost_plot()
@@ -161,3 +208,8 @@ class MainWindow(QMainWindow):
 
     def set_train_finished_status(self):
         self._status_widget.setText('Finished train')
+
+    def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
+        super().closeEvent(a0)
+        for window in self._test_windows:
+            window.close()

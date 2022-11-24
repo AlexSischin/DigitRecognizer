@@ -1,5 +1,6 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
+    <file alias="test-icon">resources/icon/test.svg</file>
     <file alias="refresh-icon">resources/icon/refresh.svg</file>
     <file alias="correlation-plot-icon">resources/icon/correlation.svg</file>
     <file alias="distribution-plot-icon">resources/icon/distribution.svg</file>

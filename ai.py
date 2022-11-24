@@ -140,6 +140,8 @@ class Ai:
         self.b = [b - bd * gradient_coefficient for b, bd in zp.zip2(self.b, b_gradient)]
 
     def _feed(self, x: np.ndarray) -> tuple[list[np.ndarray], list[np.ndarray]]:
+        if x.ndim > 1:
+            raise ValueError('X must be 1-dimensional array')
         if not all(0 <= xi <= 1 for xi in x):
             raise ValueError("All elements must have value in range: [0, 1]")
         z_factors = []
