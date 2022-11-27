@@ -26,4 +26,3 @@ class CorrelationPlot(BasePlot):
                 outputs.extend(output)
                 exp_outputs.extend(expected)
         self._scatter.setData(exp_outputs, outputs)
-

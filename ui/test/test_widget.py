@@ -14,5 +14,3 @@ class TestWidget(QWidget):
 
         self._layout.addWidget(self._tab_widget)
         self.setLayout(self._layout)
-
-

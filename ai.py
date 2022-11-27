@@ -168,4 +168,3 @@ class Ai:
             a_der = calc_next_activation_derivatives(n, n_next, z_der, l_weights)
 
         return w_derivatives, b_derivatives
-
