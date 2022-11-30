@@ -6,16 +6,16 @@ import numpy as np
 from utils import zip_utils as zp
 
 
-def sigma(x):
+def activation_func(x):
     return 1 / (1 + pow(math.e, -x))
 
 
-def sigma_der(x):
-    s = sigma(x)
+def activation_func_der(x):
+    s = activation_func(x)
     return s * (1 - s)
 
 
-sigma_v = np.vectorize(sigma)
+activation_func_vec = np.vectorize(activation_func)
 
 
 def validate_brain(weights: list[np.ndarray], biases: list[np.ndarray]):
@@ -40,7 +40,7 @@ def validate_brain(weights: list[np.ndarray], biases: list[np.ndarray]):
 def calc_z_factor_derivatives(n: int, a_der: np.ndarray, z_factor: np.ndarray):
     z_der = np.empty(shape=n)
     for j in range(n):
-        z_der[j] = sigma_der(z_factor[j]) * a_der[j]
+        z_der[j] = activation_func_der(z_factor[j]) * a_der[j]
     return z_der
 
 
@@ -148,7 +148,7 @@ class Ai:
         activations = [x]
         for w, b in zp.zip2(self.w, self.b):
             z = np.dot(w, x) + b
-            x = sigma_v(z)
+            x = activation_func_vec(z)
             z_factors.append(z)
             activations.append(x)
         return z_factors, activations
