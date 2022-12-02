@@ -1,5 +1,5 @@
 import multiprocessing as mp
-import statistics
+import random
 import sys
 
 import numpy as np
@@ -12,12 +12,12 @@ from PyQt5.QtWidgets import QApplication
 import ai
 import qrc_resources
 from ui.main_window import MainWindow
+from utils.iter_utils import is_iterable
 from utils.zip_utils import zip2
 
 # To save from imports optimization by IDEs
 qrc_resources = qrc_resources
 
-train_data, test_data = tf.keras.datasets.mnist.load_data()
 layer_sizes = (784, 16, 16, 10)
 careful_learn_threshold = .1
 train_data_chunk_size = 50
@@ -25,10 +25,6 @@ careful_train_data_chunk_size = 250
 
 metrics_queue_size = 3
 metrics_queue_batch_size = 5
-
-
-def matrix_to_xv(m):
-    return np.array([d for r in m for d in r]) / 255
 
 
 def digit_to_yv(d):
@@ -39,29 +35,49 @@ def digit_to_yv(d):
     return y
 
 
-def get_avg_components(list_of_vectors):
-    return [statistics.mean(e) for e in zip(*list_of_vectors)]
+def digit_to_yv_vec(dm):
+    return np.array([
+        digit_to_yv_vec(d) if is_iterable(d) else digit_to_yv(d)
+        for d in dm
+    ])
 
 
-def train(queue, queue_batch_size, ai_instance: ai.Ai, data, cl_threshold, c_size, cl_c_size=None):
-    x_data, y_data = data
+def normalize_image(img: np.ndarray):
+    return img / 255
+
+
+def load_train_and_test_data():
+    (train_x, train_y), (test_x, test_y) = tf.keras.datasets.mnist.load_data()
+
+    train_x = normalize_image(train_x)
+    train_y = digit_to_yv_vec(train_y)
+    test_x = normalize_image(test_x)
+    test_y = digit_to_yv_vec(test_y)
+
+    train_data = list(zip2(train_x, train_y))
+    test_data = list(zip2(test_x, test_y))
+    random.shuffle(train_data)
+    random.shuffle(test_data)
+
+    return train_data, test_data
+
+
+def train(queue, queue_batch_size, ai_instance: ai.Ai, train_data, cl_threshold, c_size, cl_c_size=None):
     last_costs = []
     last_costs_size = 10
     last_costs_cl_threshold = 5
     metrics_batch = []
     xy_chunk = []
     careful_train = False
-    for x, y in zip2(x_data, y_data):
-        x_vector = matrix_to_xv(x)
-        y_vector = digit_to_yv(y)
-        xy_chunk.append((x_vector, y_vector))
-
+    for x, y in train_data:
+        xy_chunk.append((x, y))
         cur_chunk_size = cl_c_size if careful_train else c_size
+
         if len(xy_chunk) >= cur_chunk_size:
-            x_vectors, y_vectors = zip(*xy_chunk)
+            xs, ys = zip(*xy_chunk)
             xy_chunk.clear()
             patch_gradient = True or not careful_train
-            metric = ai_instance.train(x_vectors, y_vectors, patch_gradient)
+            metric = ai_instance.train(xs, ys, patch_gradient)
             metrics_batch.append(metric)
 
             last_costs.append(metric.cost)
@@ -87,6 +103,7 @@ def create_app():
 
 
 def main():
+    train_data, test_data = load_train_and_test_data()
     queue = mp.Queue(maxsize=metrics_queue_size)
 
     app = create_app()

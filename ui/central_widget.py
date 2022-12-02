@@ -24,7 +24,6 @@ class CentralWidget(QWidget):
         self._column_count = 3
 
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet('background-color: black;')
 
         self._init_plots()
 

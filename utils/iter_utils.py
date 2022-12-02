@@ -43,3 +43,11 @@ def get_chunks(iterable, size, count=None, return_incomplete=True):
         yield from limited_iterator(generator(), count)
     else:
         yield from generator()
+
+
+def is_iterable(val):
+    try:
+        iter(val)
+    except TypeError:
+        return False
+    return True

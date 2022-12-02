@@ -9,7 +9,6 @@ from PyQt5.QtWidgets import QWidget, QPushButton, QLineEdit, QVBoxLayout, QSizeP
 import ai
 import qrc_resources
 from ui.test.dataset.img_viewer import ImageViewer
-from utils.zip_utils import zip2
 
 # To save from imports optimization by IDEs
 qrc_resources = qrc_resources
@@ -23,17 +22,19 @@ class TestInfo:
     digit_img = None
     guess = None
 
-    def update(self, digit_img, y_act, y_exp):
+    def update(self, digit_img, actual_digit, expected_digit):
         self.test_count += 1
-        self.error_count += 0 if y_exp == y_act else 1
+        self.error_count += 0 if expected_digit == actual_digit else 1
         self.accuracy = 1 - self.error_count / self.test_count
         self.digit_img = digit_img
-        self.guess = y_act
+        self.guess = actual_digit
 
 
 class DatasetTestWidget(QWidget):
     def __init__(self, ai_model: ai.Ai, test_data):
         super().__init__()
+        self._test_info = None
+        self._data_iterator = None
         self._ai_model = ai_model
         self._test_data = test_data
         self._default_interval = 0
@@ -166,20 +167,22 @@ class DatasetTestWidget(QWidget):
         self._test_timer.setInterval(int(self._interval_edit.text()))
 
     def reset_test_info(self):
-        self._data_iterator = iter(zip2(*self._test_data))
+        self._data_iterator = iter(self._test_data)
         self._test_info = TestInfo()
         self._display_info()
 
     def update_test_info(self):
         try:
-            x_test, y_exp = next(self._data_iterator)
+            x, ye = next(self._data_iterator)
         except StopIteration:
             self.finish_test()
             return
-        x_test_vec = x_test.flatten() / 255
-        y_act_vec = self._ai_model.feed(x_test_vec)
-        y_act = np.argmax(y_act_vec)
-        self._test_info.update(x_test, y_act, y_exp)
+        ya = self._ai_model.feed(x)
+
+        image = x * 255
+        actual_digit = np.argmax(ya)
+        expected_digit = np.argmax(ye)
+        self._test_info.update(image, actual_digit, expected_digit)
         self._display_info()
 
     def _display_info(self):

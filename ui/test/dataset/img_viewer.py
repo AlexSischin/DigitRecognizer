@@ -6,24 +6,31 @@ from PyQt5.QtWidgets import QLabel, QSizePolicy
 
 
 class ImageViewer(QLabel):
-    def __init__(self) -> None:
+    def __init__(self, data_type=np.uint8, image_data_format=QImage.Format_Grayscale8) -> None:
         super().__init__()
 
         self.setAlignment(Qt.AlignCenter)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMinimumSize(200, 200)
         self.resize(200, 200)
+        self._data_type = data_type
+        self._image_data_format = image_data_format
 
         self.set_image(None)
 
-    def set_image(self, mono_img: np.ndarray):
-        if mono_img is None:
+    def set_image(self, data: np.ndarray | None):
+        if data is None:
             pixmap = QPixmap(1, 1)
             pixmap.fill(QColor('gray'))
         else:
-            data = mono_img.data
-            height, width = mono_img.shape
-            img = QImage(data, height, width, QImage.Format_Grayscale8)
+            if not isinstance(data, np.ndarray):
+                raise ValueError(f'Data must be numpy.ndarray or None type. Given: {type(data)}')
+            if data.ndim != 2:
+                raise ValueError(f'Data must have two dimensions. Given: {data.ndim}')
+            if data.dtype != self._data_type:
+                data = data.astype(self._data_type)
+            height, width = data.shape
+            img = QImage(data, height, width, self._image_data_format)
             pixmap = QPixmap.fromImage(img)
         self._update_pixmap(pixmap)
 
