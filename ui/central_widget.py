@@ -1,4 +1,3 @@
-import numpy as np
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QGridLayout, QWidget
 
