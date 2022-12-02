@@ -160,20 +160,17 @@ class Ai:
         b_gradient = [b / n for b in b_gradient_sum]
         cost = square_mean_costs(costs)
         gradient_len = math.sqrt(sum([np.sum(gc ** 2) for gc in w_gradient + b_gradient]))
-        gradient_coefficient = 1 / gradient_len if patch_gradient else 1
-        self._patch(w_gradient, b_gradient, gradient_len, gradient_coefficient)
+        if gradient_len:
+            learn_rate = 1 / gradient_len if patch_gradient else 1
+            self._patch(w_gradient, b_gradient, learn_rate)
         return TrainMetric(
             w=self.w, b=self.b, w_gradient=w_gradient, b_gradient=b_gradient, gradient_len=gradient_len,
             costs=costs, cost=cost, inputs=x_vectors, outputs=outputs, expected=y_vectors
         )
 
-    def _patch(self, w_gradient: list[np.ndarray], b_gradient: list[np.ndarray], gradient_len, gradient_coefficient):
-        if gradient_len == 0:
-            return
-        if gradient_coefficient is None:
-            gradient_coefficient = 1 / gradient_len
-        self.w = [w - wd * gradient_coefficient for w, wd in zp.zip2(self.w, w_gradient)]
-        self.b = [b - bd * gradient_coefficient for b, bd in zp.zip2(self.b, b_gradient)]
+    def _patch(self, w_gradient: list[np.ndarray], b_gradient: list[np.ndarray], learn_rate):
+        self.w = [w - wd * learn_rate for w, wd in zp.zip2(self.w, w_gradient)]
+        self.b = [b - bd * learn_rate for b, bd in zp.zip2(self.b, b_gradient)]
 
     def _feed(self, x: np.ndarray) -> tuple[list[np.ndarray], list[np.ndarray]]:
         if x.ndim > 1:
