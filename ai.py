@@ -4,18 +4,34 @@ from dataclasses import dataclass
 import numpy as np
 
 from utils import zip_utils as zp
+from utils.iter_utils import is_iterable
 
 
-def activation_func(x):
-    return 1 / (1 + pow(math.e, -x))
+class ActivationFunction:
+
+    @staticmethod
+    def of_vec(xv: np.ndarray) -> np.ndarray:
+        pass
+
+    @staticmethod
+    def der_of(x: float) -> float:
+        pass
 
 
-def activation_func_der(x):
-    s = activation_func(x)
-    return s * (1 - s)
+class SigmoidFunc(ActivationFunction):
 
+    @staticmethod
+    def of(x: float) -> float:
+        return 1 / (1 + pow(math.e, -x))
 
-activation_func_vec = np.vectorize(activation_func)
+    @staticmethod
+    def of_vec(xv: np.ndarray) -> np.ndarray:
+        return np.vectorize(SigmoidFunc.of)(xv)
+
+    @staticmethod
+    def der_of(x: float) -> float:
+        s = SigmoidFunc.of(x)
+        return s * (1 - s)
 
 
 def validate_brain(weights: list[np.ndarray], biases: list[np.ndarray]):
@@ -37,10 +53,10 @@ def validate_brain(weights: list[np.ndarray], biases: list[np.ndarray]):
             raise ValueError(f'Weight columns count must be equal to bias length (depth={depth})')
 
 
-def calc_z_factor_derivatives(n: int, a_der: np.ndarray, z_factor: np.ndarray):
+def calc_z_factor_derivatives(n: int, a_der: np.ndarray, z_factor: np.ndarray, act_func_der):
     z_der = np.empty(shape=n)
     for j in range(n):
-        z_der[j] = activation_func_der(z_factor[j]) * a_der[j]
+        z_der[j] = act_func_der(z_factor[j]) * a_der[j]
     return z_der
 
 
@@ -97,12 +113,17 @@ def generate_weights_and_biases(layer_sizes):
 
 
 class Ai:
-    def __init__(self, layer_sizes=None, weights=None, biases=None) -> None:
+    def __init__(self, layer_sizes=None, weights=None, biases=None, activation_functions=SigmoidFunc()) -> None:
         if layer_sizes:
             weights, biases = generate_weights_and_biases(layer_sizes)
         validate_brain(weights, biases)
-        self.w = weights
-        self.b = biases
+
+        if not is_iterable(activation_functions):
+            activation_functions = [activation_functions for _ in biases]
+
+        self.w: list[np.ndarray] = weights
+        self.b: list[np.ndarray] = biases
+        self.activation_functions: list[ActivationFunction] = activation_functions
 
     def feed(self, x: np.ndarray) -> np.ndarray:
         return self._feed(x)[1][-1]
@@ -146,9 +167,9 @@ class Ai:
             raise ValueError("All elements must have value in range: [0, 1]")
         z_factors = []
         activations = [x]
-        for w, b in zp.zip2(self.w, self.b):
+        for w, b, act_func in zp.zip3(self.w, self.b, self.activation_functions):
             z = np.dot(w, x) + b
-            x = activation_func_vec(z)
+            x = act_func.of_vec(z)
             z_factors.append(z)
             activations.append(x)
         return z_factors, activations
@@ -156,10 +177,11 @@ class Ai:
     def _backpropagate(self, z_factors: list[np.ndarray], activations: list[np.ndarray], expected_result: np.ndarray):
         w_derivatives, b_derivatives = [], []
         a_der = calc_root_activation_derivatives(activations[-1], expected_result)
-        for l_weights, l_z_factors, next_l_activations in zp.zip3(self.w[::-1], z_factors[::-1], activations[-2::-1]):
+        for l_weights, l_act_func, l_z_factors, next_l_activations in zp.zip4(
+                self.w[::-1], self.activation_functions[::-1], z_factors[::-1], activations[-2::-1]):
             n, n_next = l_weights.shape
 
-            b_der = z_der = calc_z_factor_derivatives(n, a_der, l_z_factors)
+            b_der = z_der = calc_z_factor_derivatives(n, a_der, l_z_factors, l_act_func.der_of)
             w_der = calc_weight_derivatives(n, n_next, z_der, next_l_activations)
 
             w_derivatives.insert(0, w_der)
