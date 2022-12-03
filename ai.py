@@ -128,14 +128,15 @@ def generate_weights_and_biases(layer_sizes):
 
 
 class Ai:
-    def __init__(self, layer_sizes=None, weights=None, biases=None, activation_functions=SigmoidFunc()) -> None:
+    def __init__(self, layer_sizes=None, weights=None, biases=None, activation_functions=None) -> None:
         if layer_sizes:
             weights, biases = generate_weights_and_biases(layer_sizes)
-        validate_brain(weights, biases)
-
-        if not is_iterable(activation_functions):
+        if not activation_functions:
+            activation_functions = [SigmoidFunc() for _ in biases]
+        elif not is_iterable(activation_functions):
             activation_functions = [activation_functions for _ in biases]
 
+        validate_brain(weights, biases)
         self.w: list[np.ndarray] = weights
         self.b: list[np.ndarray] = biases
         self.activation_functions: list[ActivationFunction] = activation_functions
