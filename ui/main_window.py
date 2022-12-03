@@ -1,10 +1,11 @@
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QKeySequence
-from PyQt5.QtWidgets import QMainWindow, QToolBar, QAction, QLabel, QToolButton
+from PyQt5.QtWidgets import QMainWindow, QToolBar, QAction, QLabel
 
 import qrc_resources
 from ui.central_widget import CentralWidget
+from ui.layer_widget import LayerWidget
 from ui.metrics_dispatcher import MetricsDispatchWorkerThread
 from ui.test.test_window import TestWindow
 
@@ -14,11 +15,12 @@ qrc_resources = qrc_resources
 
 class MainWindow(QMainWindow):
 
-    def __init__(self, metrics_queue, test_data, activation_functions=None):
+    def __init__(self, metrics_queue, test_data, layer_count, activation_functions=None):
         super().__init__()
         self._queue = metrics_queue
         self._test_data = test_data
-        self._activation_functions = None
+        self._layer_count = layer_count
+        self._activation_functions = activation_functions
 
         self._metrics_buff = []
         self._test_windows = []
@@ -48,6 +50,11 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._central_widget)
         self._central_widget.sigAiVersionSelected.connect(self.on_ai_version_selected)
 
+        # Layer combobox widget
+        self._layer_widget = LayerWidget()
+        self._layer_widget.sigLayerSelected.connect(self.select_layer)
+        self._layer_widget.set_layer_count(self._layer_count)
+
     def _init_actions(self):
         # Launch test window
         test_icon = QIcon(":test-icon")
@@ -70,66 +77,69 @@ class MainWindow(QMainWindow):
         self._refresh_action.setToolTip(refresh_tip)
         self._refresh_action.triggered.connect(self.update_costs)
 
-        self._plot_buttons = []
-        self._central_widget.sigPlotWidgetsFull.connect(self.disable_inactive_plot_buttons)
-        self._central_widget.sigPlotWidgetsAvailable.connect(self.enable_inactive_plot_buttons)
+        self._plot_actions = []
+        self._central_widget.sigPlotWidgetsFull.connect(self.disable_inactive_plot_actions)
+        self._central_widget.sigPlotWidgetsAvailable.connect(self.enable_inactive_plot_actions)
 
         # Toggle distribution
         toggle_recent_cost_icon = QIcon(":recent-cost-plot-icon")
         toggle_recent_cost_text = '&Recent cost plot'
         toggle_recent_cost_tip = 'Toggle recent cost plot'
-        self._toggle_recent_cost_button = QToolButton(self)
-        self._toggle_recent_cost_button.setIcon(toggle_recent_cost_icon)
-        self._toggle_recent_cost_button.setText(toggle_recent_cost_text)
-        self._toggle_recent_cost_button.setCheckable(True)
-        self._toggle_recent_cost_button.setStatusTip(toggle_recent_cost_tip)
-        self._toggle_recent_cost_button.setToolTip(toggle_recent_cost_tip)
-        self._toggle_recent_cost_button.toggled.connect(self.toggle_recent_cost_plot)
-        self._plot_buttons.append(self._toggle_recent_cost_button)
+        self._toggle_recent_cost_action = QAction(toggle_recent_cost_icon, toggle_recent_cost_text, self)
+        self._toggle_recent_cost_action.setCheckable(True)
+        self._toggle_recent_cost_action.setStatusTip(toggle_recent_cost_tip)
+        self._toggle_recent_cost_action.setToolTip(toggle_recent_cost_tip)
+        self._toggle_recent_cost_action.toggled.connect(self.toggle_recent_cost_plot)
+        self._plot_actions.append(self._toggle_recent_cost_action)
 
         # Toggle correlation
         toggle_correlation_icon = QIcon(":correlation-plot-icon")
         toggle_correlation_text = '&Correlation plot'
         toggle_correlation_tip = 'Toggle correlation plot'
-        self._toggle_correlation_button = QToolButton(self)
-        self._toggle_correlation_button.setIcon(toggle_correlation_icon)
-        self._toggle_correlation_button.setText(toggle_correlation_text)
-        self._toggle_correlation_button.setCheckable(True)
-        self._toggle_correlation_button.setStatusTip(toggle_correlation_tip)
-        self._toggle_correlation_button.setToolTip(toggle_correlation_tip)
-        self._toggle_correlation_button.toggled.connect(self.toggle_correlation_plot)
-        self._plot_buttons.append(self._toggle_correlation_button)
+        self._toggle_correlation_action = QAction(toggle_correlation_icon, toggle_correlation_text, self)
+        self._toggle_correlation_action.setCheckable(True)
+        self._toggle_correlation_action.setStatusTip(toggle_correlation_tip)
+        self._toggle_correlation_action.setToolTip(toggle_correlation_tip)
+        self._toggle_correlation_action.toggled.connect(self.toggle_correlation_plot)
+        self._plot_actions.append(self._toggle_correlation_action)
 
         # Toggle distribution
         toggle_distribution_icon = QIcon(":distribution-plot-icon")
         toggle_distribution_text = '&Distribution plot'
         toggle_distribution_tip = 'Toggle distribution plot'
-        self._toggle_distribution_button = QToolButton(self)
-        self._toggle_distribution_button.setIcon(toggle_distribution_icon)
-        self._toggle_distribution_button.setText(toggle_distribution_text)
-        self._toggle_distribution_button.setCheckable(True)
-        self._toggle_distribution_button.setStatusTip(toggle_distribution_tip)
-        self._toggle_distribution_button.setToolTip(toggle_distribution_tip)
-        self._toggle_distribution_button.toggled.connect(self.toggle_distribution_plot)
-        self._plot_buttons.append(self._toggle_distribution_button)
+        self._toggle_distribution_action = QAction(toggle_distribution_icon, toggle_distribution_text, self)
+        self._toggle_distribution_action.setCheckable(True)
+        self._toggle_distribution_action.setStatusTip(toggle_distribution_tip)
+        self._toggle_distribution_action.setToolTip(toggle_distribution_tip)
+        self._toggle_distribution_action.toggled.connect(self.toggle_distribution_plot)
+        self._plot_actions.append(self._toggle_distribution_action)
 
         # Toggle gradient length
         toggle_gradient_length_icon = QIcon(":gradient-length-plot-icon")
         toggle_gradient_length_text = '&Gradient length plot'
         toggle_gradient_length_tip = 'Toggle gradient length plot'
-        self._toggle_gradient_length_button = QToolButton(self)
-        self._toggle_gradient_length_button.setIcon(toggle_gradient_length_icon)
-        self._toggle_gradient_length_button.setText(toggle_gradient_length_text)
-        self._toggle_gradient_length_button.setCheckable(True)
-        self._toggle_gradient_length_button.setStatusTip(toggle_gradient_length_tip)
-        self._toggle_gradient_length_button.setToolTip(toggle_gradient_length_tip)
-        self._toggle_gradient_length_button.toggled.connect(self.toggle_gradient_length_plot)
-        self._plot_buttons.append(self._toggle_gradient_length_button)
+        self._toggle_gradient_length_action = QAction(toggle_gradient_length_icon, toggle_gradient_length_text, self)
+        self._toggle_gradient_length_action.setCheckable(True)
+        self._toggle_gradient_length_action.setStatusTip(toggle_gradient_length_tip)
+        self._toggle_gradient_length_action.setToolTip(toggle_gradient_length_tip)
+        self._toggle_gradient_length_action.toggled.connect(self.toggle_gradient_length_plot)
+        self._plot_actions.append(self._toggle_gradient_length_action)
 
-        # Toggle buttons
-        self._toggle_recent_cost_button.toggle()
-        self._toggle_correlation_button.toggle()
-        self._toggle_distribution_button.toggle()
+        # Toggle gradient
+        toggle_w_grad_icon = QIcon(":w-grad-plot-icon")
+        toggle_w_grad_text = '&Weight gradient plot'
+        toggle_w_grad_tip = 'Toggle weight gradient plot'
+        self._toggle_w_grad_action = QAction(toggle_w_grad_icon, toggle_w_grad_text, self)
+        self._toggle_w_grad_action.setCheckable(True)
+        self._toggle_w_grad_action.setStatusTip(toggle_w_grad_tip)
+        self._toggle_w_grad_action.setToolTip(toggle_w_grad_tip)
+        self._toggle_w_grad_action.toggled.connect(self.toggle_w_grad_plot)
+        self._plot_actions.append(self._toggle_w_grad_action)
+
+        # Toggle actions
+        self._toggle_recent_cost_action.toggle()
+        self._toggle_correlation_action.toggle()
+        self._toggle_distribution_action.toggle()
 
     def _init_toolbar(self):
         # AI management
@@ -138,13 +148,19 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.LeftToolBarArea, self._main_toolbar)
 
         self._main_toolbar.addAction(self._test_action)
+
         self._main_toolbar.addSeparator()
         self._main_toolbar.addAction(self._refresh_action)
+
         self._main_toolbar.addSeparator()
-        self._main_toolbar.addWidget(self._toggle_recent_cost_button)
-        self._main_toolbar.addWidget(self._toggle_correlation_button)
-        self._main_toolbar.addWidget(self._toggle_distribution_button)
-        self._main_toolbar.addWidget(self._toggle_gradient_length_button)
+        self._main_toolbar.addAction(self._toggle_recent_cost_action)
+        self._main_toolbar.addAction(self._toggle_correlation_action)
+        self._main_toolbar.addAction(self._toggle_distribution_action)
+        self._main_toolbar.addAction(self._toggle_gradient_length_action)
+        self._main_toolbar.addAction(self._toggle_w_grad_action)
+
+        self._main_toolbar.addSeparator()
+        self._main_toolbar.addWidget(self._layer_widget)
 
     def _init_statusbar(self):
         self._statusbar = self.statusBar()
@@ -172,9 +188,9 @@ class MainWindow(QMainWindow):
 
     def _update_test_action_state(self):
         running_version_tests = [w.ai_version for w in self._test_windows]
-        enable_test_button = self._selected_ai_version \
+        enable_test_action = self._selected_ai_version \
                              and self._selected_ai_version not in running_version_tests
-        self._test_action.setDisabled(not enable_test_button)
+        self._test_action.setDisabled(not enable_test_action)
 
     def update_costs(self):
         self._central_widget.update_cost_plot()
@@ -194,13 +210,16 @@ class MainWindow(QMainWindow):
     def toggle_gradient_length_plot(self, checked):
         self._central_widget.toggle_gradient_length_plot(checked)
 
-    def disable_inactive_plot_buttons(self):
-        for b in self._plot_buttons:
+    def toggle_w_grad_plot(self, checked):
+        self._central_widget.toggle_w_grad_plot(checked)
+
+    def disable_inactive_plot_actions(self):
+        for b in self._plot_actions:
             if not b.isChecked():
                 b.setDisabled(True)
 
-    def enable_inactive_plot_buttons(self):
-        for b in self._plot_buttons:
+    def enable_inactive_plot_actions(self):
+        for b in self._plot_actions:
             if not b.isChecked():
                 b.setDisabled(False)
 
@@ -209,6 +228,9 @@ class MainWindow(QMainWindow):
 
     def set_train_finished_status(self):
         self._status_widget.setText('Finished train')
+
+    def select_layer(self, layer):
+        self._central_widget.set_layer(layer)
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
         super().closeEvent(a0)

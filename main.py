@@ -106,9 +106,11 @@ def create_app():
 def main():
     train_data, test_data = load_train_and_test_data()
     queue = mp.Queue(maxsize=metrics_queue_size)
+    layer_count = len(layer_sizes)
 
     app = create_app()
-    window = MainWindow(queue, test_data, activation_functions)
+
+    window = MainWindow(queue, test_data, layer_count, activation_functions)
     window.show()
 
     ai_model = ai.Ai(layer_sizes=layer_sizes, activation_functions=activation_functions)

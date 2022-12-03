@@ -7,6 +7,7 @@ from ui.plot.correlation import CorrelationPlot
 from ui.plot.cost import CostPlot
 from ui.plot.distribution import DistributionPlot
 from ui.plot.gradient_length_plot import GradientLengthPlot
+from ui.plot.w_grad_plot import WGradPlot
 from ui.plot.recent_cost import RecentCostPlot
 
 
@@ -61,6 +62,10 @@ class CentralWidget(QWidget):
         self._gradient_length_plot = GradientLengthPlot()
         self._optional_plots.append(self._gradient_length_plot)
 
+        # Weight gradient
+        self._w_grad_plot = WGradPlot()
+        self._optional_plots.append(self._w_grad_plot)
+
         for p in self._optional_plots:
             p.hide()
             p.enabled = False
@@ -78,6 +83,7 @@ class CentralWidget(QWidget):
             self._correlation_plot.set_data(region_metrics)
             self._distribution_plot.set_data(region_metrics)
             self._gradient_length_plot.set_data(region_metrics)
+            self._w_grad_plot.set_data(region_metrics)
 
     def update_cost_plot(self):
         self._cost_plot.set_data(self._metrics_buff)
@@ -133,3 +139,9 @@ class CentralWidget(QWidget):
 
     def toggle_gradient_length_plot(self, checked):
         self._toggle_plot(self._gradient_length_plot, checked)
+
+    def toggle_w_grad_plot(self, checked):
+        self._toggle_plot(self._w_grad_plot, checked)
+
+    def set_layer(self, layer: int):
+        self._w_grad_plot.set_layer(layer)
