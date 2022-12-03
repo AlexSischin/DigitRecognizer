@@ -15,9 +15,10 @@ class CentralWidget(QWidget):
     sigPlotWidgetsAvailable = pyqtSignal()
     sigAiVersionSelected = pyqtSignal(int)
 
-    def __init__(self, metrics_buff: list[TrainMetric], parent=None):
-        super().__init__(parent)
+    def __init__(self, metrics_buff: list[TrainMetric], activation_functions=None):
+        super().__init__()
         self._metrics_buff = metrics_buff
+        self._activation_functions = activation_functions
         self._last_region = None
         self._row_count = 2
         self._column_count = 3
@@ -88,7 +89,7 @@ class CentralWidget(QWidget):
     def get_ai_version(self, version_id: int) -> ai.Ai:
         for m in self._metrics_buff:
             if m.data_used == version_id:
-                return ai.Ai(weights=m.w, biases=m.b)
+                return ai.Ai(weights=m.w, biases=m.b, activation_functions=self._activation_functions)
         raise ValueError(f'Could not find a metric with data used (version id): {version_id}')
 
     def _on_spot_selected(self, data_used):

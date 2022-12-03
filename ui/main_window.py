@@ -14,10 +14,11 @@ qrc_resources = qrc_resources
 
 class MainWindow(QMainWindow):
 
-    def __init__(self, metrics_queue, test_data):
+    def __init__(self, metrics_queue, test_data, activation_functions=None):
         super().__init__()
         self._queue = metrics_queue
         self._test_data = test_data
+        self._activation_functions = None
 
         self._metrics_buff = []
         self._test_windows = []
@@ -43,7 +44,7 @@ class MainWindow(QMainWindow):
 
     def _init_widgets(self):
         # Plots
-        self._central_widget = CentralWidget(self._metrics_buff, self)
+        self._central_widget = CentralWidget(self._metrics_buff, self._activation_functions)
         self.setCentralWidget(self._central_widget)
         self._central_widget.sigAiVersionSelected.connect(self.on_ai_version_selected)
 

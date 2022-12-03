@@ -19,6 +19,7 @@ from utils.zip_utils import zip2
 qrc_resources = qrc_resources
 
 layer_sizes = (784, 16, 16, 10)
+activation_functions = (ai.SigmoidFunc(), ai.SigmoidFunc(), ai.SigmoidFunc())
 careful_learn_threshold = .1
 train_data_chunk_size = 50
 careful_train_data_chunk_size = 250
@@ -107,10 +108,10 @@ def main():
     queue = mp.Queue(maxsize=metrics_queue_size)
 
     app = create_app()
-    window = MainWindow(queue, test_data)
+    window = MainWindow(queue, test_data, activation_functions)
     window.show()
 
-    ai_model = ai.Ai(layer_sizes)
+    ai_model = ai.Ai(layer_sizes=layer_sizes, activation_functions=activation_functions)
     train_args = (queue, metrics_queue_batch_size, ai_model, train_data,
                   careful_learn_threshold, train_data_chunk_size, careful_train_data_chunk_size)
     train_process = mp.Process(target=train, args=train_args, daemon=True)
