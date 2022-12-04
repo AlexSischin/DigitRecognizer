@@ -7,5 +7,6 @@
     <file alias="recent-cost-plot-icon">resources/icon/recent-cost.svg</file>
     <file alias="gradient-length-plot-icon">resources/icon/gradient-length.svg</file>
     <file alias="w-grad-plot-icon">resources/icon/w-grad.svg</file>
+    <file alias="b-grad-plot-icon">resources/icon/b-grad.svg</file>
 </qresource>
 </RCC>

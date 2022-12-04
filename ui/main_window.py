@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
         self._toggle_gradient_length_action.toggled.connect(self.toggle_gradient_length_plot)
         self._plot_actions.append(self._toggle_gradient_length_action)
 
-        # Toggle gradient
+        # Toggle weight gradient
         toggle_w_grad_icon = QIcon(":w-grad-plot-icon")
         toggle_w_grad_text = '&Weight gradient plot'
         toggle_w_grad_tip = 'Toggle weight gradient plot'
@@ -135,6 +135,17 @@ class MainWindow(QMainWindow):
         self._toggle_w_grad_action.setToolTip(toggle_w_grad_tip)
         self._toggle_w_grad_action.toggled.connect(self.toggle_w_grad_plot)
         self._plot_actions.append(self._toggle_w_grad_action)
+
+        # Toggle bias gradient
+        toggle_b_grad_icon = QIcon(":b-grad-plot-icon")
+        toggle_b_grad_text = '&Bias gradient plot'
+        toggle_b_grad_tip = 'Toggle bias gradient plot'
+        self._toggle_b_grad_action = QAction(toggle_b_grad_icon, toggle_b_grad_text, self)
+        self._toggle_b_grad_action.setCheckable(True)
+        self._toggle_b_grad_action.setStatusTip(toggle_b_grad_tip)
+        self._toggle_b_grad_action.setToolTip(toggle_b_grad_tip)
+        self._toggle_b_grad_action.toggled.connect(self.toggle_b_grad_plot)
+        self._plot_actions.append(self._toggle_b_grad_action)
 
         # Toggle actions
         self._toggle_recent_cost_action.toggle()
@@ -158,6 +169,7 @@ class MainWindow(QMainWindow):
         self._main_toolbar.addAction(self._toggle_distribution_action)
         self._main_toolbar.addAction(self._toggle_gradient_length_action)
         self._main_toolbar.addAction(self._toggle_w_grad_action)
+        self._main_toolbar.addAction(self._toggle_b_grad_action)
 
         self._main_toolbar.addSeparator()
         self._main_toolbar.addWidget(self._layer_widget)
@@ -212,6 +224,9 @@ class MainWindow(QMainWindow):
 
     def toggle_w_grad_plot(self, checked):
         self._central_widget.toggle_w_grad_plot(checked)
+
+    def toggle_b_grad_plot(self, checked):
+        self._central_widget.toggle_b_grad_plot(checked)
 
     def disable_inactive_plot_actions(self):
         for b in self._plot_actions:

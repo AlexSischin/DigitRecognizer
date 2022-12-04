@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QGridLayout, QWidget
 
 import ai
 from ui.metrics_dispatcher import TrainMetric
+from ui.plot.b_grad_plot import BGradPlot
 from ui.plot.correlation import CorrelationPlot
 from ui.plot.cost import CostPlot
 from ui.plot.distribution import DistributionPlot
@@ -66,6 +67,10 @@ class CentralWidget(QWidget):
         self._w_grad_plot = WGradPlot()
         self._optional_plots.append(self._w_grad_plot)
 
+        # Bias gradient
+        self._b_grad_plot = BGradPlot()
+        self._optional_plots.append(self._b_grad_plot)
+
         for p in self._optional_plots:
             p.hide()
             p.enabled = False
@@ -84,6 +89,7 @@ class CentralWidget(QWidget):
             self._distribution_plot.set_data(region_metrics)
             self._gradient_length_plot.set_data(region_metrics)
             self._w_grad_plot.set_data(region_metrics)
+            self._b_grad_plot.set_data(region_metrics)
 
     def update_cost_plot(self):
         self._cost_plot.set_data(self._metrics_buff)
@@ -143,5 +149,9 @@ class CentralWidget(QWidget):
     def toggle_w_grad_plot(self, checked):
         self._toggle_plot(self._w_grad_plot, checked)
 
+    def toggle_b_grad_plot(self, checked):
+        self._toggle_plot(self._b_grad_plot, checked)
+
     def set_layer(self, layer: int):
         self._w_grad_plot.set_layer(layer)
+        self._b_grad_plot.set_layer(layer)
