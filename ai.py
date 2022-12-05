@@ -98,6 +98,7 @@ def calc_next_activation_derivatives(n: int, n_next: int, z_der: np.ndarray, wei
 
 @dataclass(frozen=True)
 class TrainMetric:
+    data_used: int
     w: list[np.ndarray]
     b: list[np.ndarray]
     w_gradient: list[np.ndarray]
@@ -140,6 +141,7 @@ class Ai:
         self.w: list[np.ndarray] = weights
         self.b: list[np.ndarray] = biases
         self.activation_functions: list[ActivationFunction] = activation_functions
+        self._data_used = 0
 
     def feed(self, x: np.ndarray) -> np.ndarray:
         return self._feed(x)[1][-1]
@@ -164,9 +166,10 @@ class Ai:
         if gradient_len:
             learn_rate = 1 / gradient_len if patch_gradient else 1
             self._patch(w_gradient, b_gradient, learn_rate)
+        self._data_used += len(x_vectors)
         return TrainMetric(
-            w=self.w, b=self.b, w_gradient=w_gradient, b_gradient=b_gradient, gradient_len=gradient_len,
-            costs=costs, cost=cost, inputs=x_vectors, outputs=outputs, expected=y_vectors
+            data_used=self._data_used, w=self.w, b=self.b, w_gradient=w_gradient, b_gradient=b_gradient,
+            gradient_len=gradient_len, costs=costs, cost=cost, inputs=x_vectors, outputs=outputs, expected=y_vectors
         )
 
     def _patch(self, w_gradient: list[np.ndarray], b_gradient: list[np.ndarray], learn_rate):

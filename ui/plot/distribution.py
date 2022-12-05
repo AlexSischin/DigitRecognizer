@@ -1,20 +1,49 @@
 import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtGui import QTransform
+from PyQt5.QtWidgets import QVBoxLayout, QWidget
+from pyqtgraph import PlotWidget
 
 import ai
-from ui.plot.base_plot import BasePlot
+from ui.metrics_dispatcher import Hub
 
 
-class DistributionPlot(BasePlot):
-    def __init__(self, resolution=100) -> None:
+class DistributionHub(Hub):
+    def __init__(self) -> None:
         super().__init__()
+        self._neurons = []
+        self._outputs = []
+
+    def update_data(self, metrics: list[ai.TrainMetric]):
+        for m in metrics:
+            neurons = np.concatenate([np.indices(o.shape)[0] for o in m.outputs])
+            outputs = np.concatenate([o for o in m.outputs])
+            self._neurons.append(neurons)
+            self._outputs.append(outputs)
+
+    def calc(self, left, right, resolution):
+        neurons = np.concatenate(self._neurons[left:right])
+        outputs = np.concatenate(self._outputs[left:right])
+        bin_x = resolution
+        bin_y = np.linspace(0, 1, resolution)
+        hist, _, _ = np.histogram2d(neurons, outputs, bins=(bin_x, bin_y), normed=False)
+        return hist
+
+
+class DistributionWidget(QWidget):
+    def __init__(self, hub: DistributionHub, resolution=100) -> None:
+        super().__init__()
+        self._hub = hub
         self._resolution = resolution
 
-        self.setStyleSheet("border: 1px solid black;")
-        self.setTitle("Activation by neuron")
-        self.setLabel('left', "Activation")
-        self.setLabel('bottom', "Neuron")
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        plot = PlotWidget()
+        self._item = plot.getPlotItem()
+        plot.setTitle("Activation by neuron")
+        plot.setLabel('left', "Activation")
+        plot.setLabel('bottom', "Neuron")
 
         self._bar = pg.ColorBarItem(values=(0, 10))
         self._img = pg.ImageItem()
@@ -23,18 +52,12 @@ class DistributionPlot(BasePlot):
         self._img.setTransform(self._image_transform)
         self._item.addItem(self._img)
 
-    def set_data(self, metrics: list[ai.TrainMetric]):
-        if metrics:
-            neurons = []
-            outputs = []
-            for metric in metrics:
-                for output in metric.outputs:
-                    for neuron, activation in enumerate(output):
-                        neurons.append(neuron)
-                        outputs.append(activation)
-            bin_x = self._resolution
-            bin_y = np.linspace(0, 1, self._resolution)
-            hist, _, _ = np.histogram2d(neurons, outputs, bins=(bin_x, bin_y), normed=False)
+        layout.addWidget(plot)
+        self.setLayout(layout)
+
+    def update_data(self, left, right):
+        if left is not None and right is not None and self._resolution:
+            hist = self._hub.calc(left, right, self._resolution)
             self._img.setImage(image=hist)
         else:
             self._img.clear()

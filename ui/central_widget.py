@@ -1,157 +1,156 @@
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import QGridLayout, QWidget
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMdiArea, QSplitter, QMdiSubWindow
 
 import ai
-from ui.metrics_dispatcher import TrainMetric
-from ui.plot.b_grad_plot import BGradPlot
-from ui.plot.correlation import CorrelationPlot
-from ui.plot.cost import CostPlot
-from ui.plot.distribution import DistributionPlot
-from ui.plot.gradient_length_plot import GradientLengthPlot
-from ui.plot.w_grad_plot import WGradPlot
-from ui.plot.recent_cost import RecentCostPlot
+from ui.ai_hub import AiHub
+from ui.metrics_dispatcher import MetricsDispatchWorkerThread
+from ui.plot.b_grad import BGradWidget, BGradHub
+from ui.plot.correlation import CorrelationWidget, CorrelationHub
+from ui.plot.cost import CostWidget, CostHub
+from ui.plot.distribution import DistributionWidget, DistributionHub
+from ui.plot.grad_len import GradLenWidget, GradLenHub
+from ui.plot.recent_cost import RecentCostWidget, RecentCostHub
+from ui.plot.w_grad import WGradWidget, WGradHub
+from ui.version_hub import VersionHub, Approx
 
 
 class CentralWidget(QWidget):
-    sigPlotWidgetsFull = pyqtSignal()
-    sigPlotWidgetsAvailable = pyqtSignal()
-    sigAiVersionSelected = pyqtSignal(int)
+    sigAiVersionSelected = pyqtSignal(float)
+    sigTrainRun = pyqtSignal()
+    sigTrainFinished = pyqtSignal()
+    sigRefreshed = pyqtSignal()
+    sigMetricsUpdated = pyqtSignal()
+    sigRegionUpdated = pyqtSignal(int, int, int)
+    sigLayerUpdated = pyqtSignal(int, int, int)
 
-    def __init__(self, metrics_buff: list[TrainMetric], activation_functions=None):
+    def __init__(self, queue, activation_functions=None):
         super().__init__()
-        self._metrics_buff = metrics_buff
+        self._queue = queue
         self._activation_functions = activation_functions
-        self._last_region = None
-        self._row_count = 2
-        self._column_count = 3
+        self._left = None
+        self._right = None
+        self._layer = None
 
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet('background-color: black;')
+        self._init_hubs()
+        self._init_threads()
 
-        self._init_plots()
+        self.setLayout(self._init_layout())
 
-    def _init_plots(self):
-        self._layout = QGridLayout(self)
-        self._layout.setColumnStretch(0, 1)
-        self._layout.setColumnStretch(1, 1)
-        self._layout.setColumnStretch(2, 1)
-        self._layout.setRowStretch(0, 1)
-        self._layout.setRowStretch(1, 1)
-        self.setLayout(self._layout)
+        self.add_recent_cost_widget()
+        self.tile()
 
-        self._optional_plots = []
+    def _init_hubs(self):
+        # Util
+        self._version_hub = VersionHub()
+        self._ai_hub = AiHub()
 
-        # All costs
-        self._cost_plot = CostPlot()
-        self._cost_plot.lr.sigRegionChanged.connect(self.update_region)
-        self._cost_plot.sigSpotSelected.connect(self._on_spot_selected)
-        self._layout.addWidget(self._cost_plot, 0, 0, 1, 3)
+        # Sub widgets
+        self._cost_hub = CostHub()
+        self._recent_cost_hub = RecentCostHub()
+        self._correlation_hub = CorrelationHub()
+        self._distribution_hub = DistributionHub()
+        self._grad_len_hub = GradLenHub()
+        self._w_grad_hub = WGradHub()
+        self._b_grad_hub = BGradHub()
 
-        # Recent costs
-        self._recent_cost_plot = RecentCostPlot()
-        self._optional_plots.append(self._recent_cost_plot)
+    def _init_threads(self):
+        # Metrics dispatch
+        self._metrics_dispatcher = MetricsDispatchWorkerThread(self._queue, hubs=(
+            self._version_hub, self._ai_hub, self._cost_hub, self._recent_cost_hub, self._correlation_hub,
+            self._distribution_hub, self._grad_len_hub, self._b_grad_hub, self._w_grad_hub
+        ))
+        self._metrics_dispatcher.started.connect(self.sigTrainRun.emit)
+        self._metrics_dispatcher.updated.connect(self.sigMetricsUpdated.emit)
+        self._metrics_dispatcher.finished.connect(self.sigTrainFinished.emit)
+        self._metrics_dispatcher.finished.connect(self._metrics_dispatcher.deleteLater)
+        self._metrics_dispatcher.start()
 
-        # Correlation
-        self._correlation_plot = CorrelationPlot()
-        self._optional_plots.append(self._correlation_plot)
+    def _init_layout(self):
+        layout = QVBoxLayout()
+        splitter = QSplitter(Qt.Vertical)
+        splitter.setOpaqueResize(False)
+        splitter.addWidget(self._init_dispatcher_widget())
+        splitter.addWidget(self._init_mdi_widget())
+        splitter.setSizes((200, 200))
+        layout.addWidget(splitter)
+        return layout
 
-        # Distribution
-        self._distribution_plot = DistributionPlot()
-        self._optional_plots.append(self._distribution_plot)
+    def _init_dispatcher_widget(self):
+        self._dispatcher_widget = CostWidget(self._cost_hub)
+        self.sigRefreshed.connect(self._dispatcher_widget.refresh)
+        self._dispatcher_widget.sigRegionChanged.connect(self._update_region)
+        self._dispatcher_widget.sigSpotSelected.connect(self.sigAiVersionSelected.emit)
+        return self._dispatcher_widget
 
-        # Gradient length
-        self._gradient_length_plot = GradientLengthPlot()
-        self._optional_plots.append(self._gradient_length_plot)
+    def _init_mdi_widget(self):
+        self._mdi = QMdiArea()
+        self._mdi.setMinimumHeight(200)
+        return self._mdi
 
-        # Weight gradient
-        self._w_grad_plot = WGradPlot()
-        self._optional_plots.append(self._w_grad_plot)
+    def add_recent_cost_widget(self):
+        widget = RecentCostWidget(self._recent_cost_hub)
+        widget.update_data()
+        self.sigMetricsUpdated.connect(widget.update_data)
+        self._add_mdi_widget(widget)
 
-        # Bias gradient
-        self._b_grad_plot = BGradPlot()
-        self._optional_plots.append(self._b_grad_plot)
+    def add_correlation_widget(self):
+        widget = CorrelationWidget(self._correlation_hub)
+        widget.update_data(self._left, self._right)
+        self.sigRegionUpdated.connect(widget.update_data)
+        self._add_mdi_widget(widget)
 
-        for p in self._optional_plots:
-            p.hide()
-            p.enabled = False
+    def add_distribution_widget(self):
+        widget = DistributionWidget(self._distribution_hub)
+        widget.update_data(self._left, self._right)
+        self.sigRegionUpdated.connect(widget.update_data)
+        self._add_mdi_widget(widget)
 
-        self._plot_widgets_available = (self._row_count - 1) * self._column_count
-        self._plot_widgets_active = 0
+    def add_grad_len_widget(self):
+        widget = GradLenWidget(self._grad_len_hub)
+        widget.update_data(self._left, self._right)
+        self.sigRegionUpdated.connect(widget.update_data)
+        self._add_mdi_widget(widget)
 
-    def update_region(self):
-        left_bound, right_bound = self._cost_plot.lr.getRegion()
-        region_metrics = [m for m in self._metrics_buff if left_bound <= m.data_used <= right_bound]
-        region = (region_metrics[0].data_used, region_metrics[-1].data_used) if region_metrics else None
+    def add_w_grad_plot(self):
+        widget = WGradWidget(self._w_grad_hub)
+        widget.update_data(self._left, self._right, self._layer)
+        self.sigRegionUpdated.connect(widget.update_data)
+        self.sigLayerUpdated.connect(widget.update_data)
+        self._add_mdi_widget(widget)
 
-        if region != self._last_region:
-            self._last_region = region
-            self._correlation_plot.set_data(region_metrics)
-            self._distribution_plot.set_data(region_metrics)
-            self._gradient_length_plot.set_data(region_metrics)
-            self._w_grad_plot.set_data(region_metrics)
-            self._b_grad_plot.set_data(region_metrics)
+    def add_b_grad_plot(self):
+        widget = BGradWidget(self._b_grad_hub)
+        widget.update_data(self._left, self._right, self._layer)
+        self.sigRegionUpdated.connect(widget.update_data)
+        self.sigLayerUpdated.connect(widget.update_data)
+        self._add_mdi_widget(widget)
 
-    def update_cost_plot(self):
-        self._cost_plot.set_data(self._metrics_buff)
+    def _add_mdi_widget(self, widget):
+        sub = QMdiSubWindow()
+        sub.setWidget(widget)
+        sub.setAttribute(Qt.WA_DeleteOnClose)
+        self._mdi.addSubWindow(sub)
+        sub.show()
 
-    def update_metrics(self):
-        recent_metrics = self._metrics_buff[-50:]
-        self._recent_cost_plot.set_data(recent_metrics)
+    def tile(self):
+        self._mdi.tileSubWindows()
 
-    def get_ai_version(self, version_id: int) -> ai.Ai:
-        for m in self._metrics_buff:
-            if m.data_used == version_id:
-                return ai.Ai(weights=m.w, biases=m.b, activation_functions=self._activation_functions)
-        raise ValueError(f'Could not find a metric with data used (version id): {version_id}')
+    def _update_region(self, left_du, right_du):
+        left = self._version_hub.get_version(left_du, approx=Approx.GE)
+        right = self._version_hub.get_version(right_du, approx=Approx.LE) + 1
 
-    def _on_spot_selected(self, data_used):
-        self.sigAiVersionSelected.emit(int(data_used))
+        if left is None or right is None:
+            left, right = None, None
 
-    def rearrange_plots(self):
-        counter = 0
-        for i, pw in enumerate(self._optional_plots):
-            self._layout.removeWidget(pw)
-            pw.hide()
-            if pw.enabled:
-                r, c = divmod(counter + self._column_count, self._column_count)
-                if r >= self._row_count or c >= self._column_count:
-                    raise ValueError('Out of grid bounds')
-                self._layout.addWidget(pw, r, c)
-                pw.show()
-                counter += 1
+        if self._left != left or self._right != right:
+            self._left, self._right = left, right
+            self.sigRegionUpdated.emit(left, right, self._layer)
 
-    def _toggle_plot(self, plot, checked):
-        if plot.enabled == checked:
-            raise ValueError(f'Plot widget is already in the desired state')
-        if checked:
-            self._plot_widgets_active += 1
-            if self._plot_widgets_active >= self._plot_widgets_available:
-                self.sigPlotWidgetsFull.emit()
-        else:
-            if self._plot_widgets_active == self._plot_widgets_available:
-                self.sigPlotWidgetsAvailable.emit()
-            self._plot_widgets_active -= 1
-        plot.enabled = checked
-        self.rearrange_plots()
+    def update_layer(self, layer: int):
+        self._layer = layer
+        self.sigLayerUpdated.emit(self._left, self._right, layer)
 
-    def toggle_recent_cost_plot(self, checked):
-        self._toggle_plot(self._recent_cost_plot, checked)
-
-    def toggle_correlation_plot(self, checked):
-        self._toggle_plot(self._correlation_plot, checked)
-
-    def toggle_distribution_plot(self, checked):
-        self._toggle_plot(self._distribution_plot, checked)
-
-    def toggle_gradient_length_plot(self, checked):
-        self._toggle_plot(self._gradient_length_plot, checked)
-
-    def toggle_w_grad_plot(self, checked):
-        self._toggle_plot(self._w_grad_plot, checked)
-
-    def toggle_b_grad_plot(self, checked):
-        self._toggle_plot(self._b_grad_plot, checked)
-
-    def set_layer(self, layer: int):
-        self._w_grad_plot.set_layer(layer)
-        self._b_grad_plot.set_layer(layer)
+    def get_ai_v_by_duv(self, data_used_version: int, act_funcs: tuple[ai.ActivationFunction]) -> ai.Ai:
+        v = self._version_hub.get_version(data_used_version)
+        w, b = self._ai_hub.get_version(v)
+        return ai.Ai(weights=w, biases=b, activation_functions=act_funcs)

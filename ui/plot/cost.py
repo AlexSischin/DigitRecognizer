@@ -1,54 +1,82 @@
 import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from pyqtgraph import PlotWidget
 
-from ui.metrics_dispatcher import TrainMetric
-from ui.plot.base_plot import BasePlot
+import ai
+from ui.metrics_dispatcher import Hub
 
 
-class CostPlot(BasePlot):
-    sigSpotSelected = pyqtSignal(float)
-
+class CostHub(Hub):
     def __init__(self) -> None:
         super().__init__()
+        self._costs = []
 
-        self.setStyleSheet("border: 1px solid black;")
-        self.setTitle("Cost by train data")
+    def update_data(self, metrics: list[ai.TrainMetric]):
+        self._costs.extend([(m.data_used, m.cost) for m in metrics])
 
-        self.setLabel('left', "Cost")
-        self.setLabel('bottom', "Train data")
-        self.curve = self.plot(pen=(0, 128, 0), symbol='t', symbolBrush=(0, 128, 0))
+    def calc(self):
+        return np.array(self._costs)
+
+
+class CostWidget(QWidget):
+    sigSpotSelected = pyqtSignal(float)
+    sigRegionChanged = pyqtSignal(float, float)
+
+    def __init__(self, hub: CostHub) -> None:
+        super().__init__()
+
+        self._hub = hub
+
+        self.setMinimumHeight(100)
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        plot = PlotWidget()
+        plot.setTitle("Cost by train data")
+        plot.setLabel('left', "Cost")
+        plot.setLabel('bottom', "Train data")
+        plot.showGrid(x=True, y=True)
+
+        self.curve = plot.plot(pen=(0, 128, 0), symbol='t', symbolBrush=(0, 128, 0))
         self.curve.scatter.opts['hoverable'] = True
         self.curve.scatter.opts['clickable'] = True
         self.data = np.random.normal(size=(10, 1000))
-        self.showGrid(x=True, y=True)
 
-        self.lr = pg.LinearRegionItem((0, 0))
-        self.lr.setZValue(-10)
-        self.lr.hide()
-        self.addItem(self.lr)
+        self._lr = pg.LinearRegionItem((0, 0))
+        self._lr.setZValue(-10)
+        self._lr.hide()
+        self._lr.sigRegionChanged.connect(lambda r: self.sigRegionChanged.emit(*self._lr.getRegion()))
+        plot.addItem(self._lr)
 
         self.hovered_spot = None
         self.selected_spot = None
         self.hover_scatter = pg.ScatterPlotItem(brush=pg.mkBrush(217, 83, 25), symbol='t')
         self.selection_scatter = pg.ScatterPlotItem(size=11, brush=pg.mkBrush(217, 83, 25), symbol='s')
-        self.addItem(self.hover_scatter)
-        self.addItem(self.selection_scatter)
+        plot.addItem(self.hover_scatter)
+        plot.addItem(self.selection_scatter)
 
         self.curve.sigPointsHovered.connect(self.handle_points_hover)
         self.curve.sigPointsClicked.connect(self.handle_points_click)
         self.hover_scatter.sigClicked.connect(self.handle_points_click)
 
-    def set_data(self, metrics: list[TrainMetric]):
-        nodes = [(m.data_used, m.cost) for m in metrics]
-        self.curve.setData(np.array(nodes))
-        if metrics:
-            self.lr.setBounds((metrics[0].data_used, metrics[-1].data_used))
-            if not self.lr.isVisible():
-                self.lr.show()
-                self.lr.setRegion((metrics[0].data_used, metrics[min(5, len(metrics) - 1)].data_used))
+        layout.addWidget(plot)
+        self.setLayout(layout)
+
+    def refresh(self):
+        nodes = self._hub.calc()
+        self.curve.setData(nodes)
+        if nodes.size > 0:
+            self._lr.setBounds((nodes[0, 0], nodes[-1, 0]))
+            if not self._lr.isVisible():
+                self._lr.show()
+                region_left = nodes[0, 0]
+                region_right = nodes[min(5, nodes.shape[0] - 1), 0]
+                self._lr.setRegion((region_left, region_right))
         else:
-            self.lr.hide()
+            self._lr.hide()
 
     def handle_points_hover(self, _data_item, spots, _ev):
         if len(spots):
