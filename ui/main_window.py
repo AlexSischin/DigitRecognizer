@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
         self._central_widget = CentralWidget(self._queue)
         self.setCentralWidget(self._central_widget)
         self._central_widget.sigAiVersionSelected.connect(self.on_ai_version_selected)
+        self._central_widget.sigTrainRun.connect(self.set_train_running_status)
         self._central_widget.sigTrainFinished.connect(self.set_train_finished_status)
 
         # Layer combobox widget
