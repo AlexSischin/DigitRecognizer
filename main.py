@@ -20,9 +20,7 @@ qrc_resources = qrc_resources
 
 layer_sizes = (784, 16, 16, 10)
 activation_functions = (ai.SigmoidFunc(), ai.SigmoidFunc(), ai.SigmoidFunc())
-careful_learn_threshold = .1
 train_data_chunk_size = 50
-careful_train_data_chunk_size = 250
 
 metrics_queue_size = 3
 metrics_queue_batch_size = 5
@@ -63,28 +61,17 @@ def load_train_and_test_data():
     return train_data, test_data
 
 
-def train(queue, queue_batch_size, ai_instance: ai.Ai, train_data, cl_threshold, c_size, cl_c_size=None):
-    last_costs = []
-    last_costs_size = 10
-    last_costs_cl_threshold = 5
+def train(queue, queue_batch_size, ai_instance: ai.Ai, train_data, c_size):
     metrics_batch = []
     xy_chunk = []
-    careful_train = False
     for x, y in train_data:
         xy_chunk.append((x, y))
-        cur_chunk_size = cl_c_size if careful_train else c_size
 
-        if len(xy_chunk) >= cur_chunk_size:
+        if len(xy_chunk) >= c_size:
             xs, ys = zip(*xy_chunk)
             xy_chunk.clear()
-            patch_gradient = True or not careful_train
-            metric = ai_instance.train(xs, ys, patch_gradient)
+            metric = ai_instance.train(xs, ys)
             metrics_batch.append(metric)
-
-            last_costs.append(metric.cost)
-            if len(last_costs) >= last_costs_size:
-                last_costs.pop(0)
-            careful_train = len([1 for c in last_costs if c < cl_threshold]) >= last_costs_cl_threshold
 
             if len(metrics_batch) >= queue_batch_size:
                 queue.put_nowait(metrics_batch)
@@ -114,8 +101,7 @@ def main():
     window.show()
 
     ai_model = ai.Ai(layer_sizes=layer_sizes, activation_functions=activation_functions)
-    train_args = (queue, metrics_queue_batch_size, ai_model, train_data,
-                  careful_learn_threshold, train_data_chunk_size, careful_train_data_chunk_size)
+    train_args = (queue, metrics_queue_batch_size, ai_model, train_data, train_data_chunk_size)
     train_process = mp.Process(target=train, args=train_args, daemon=True)
     train_process.start()
 

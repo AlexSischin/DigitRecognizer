@@ -146,7 +146,11 @@ class Ai:
     def feed(self, x: np.ndarray) -> np.ndarray:
         return self._feed(x)[1][-1]
 
-    def train(self, x_vectors: list[np.ndarray], y_vectors: list[np.ndarray], patch_gradient=True) -> TrainMetric:
+    def train(self,
+              x_vectors: list[np.ndarray],
+              y_vectors: list[np.ndarray],
+              learning_rate: float = None
+              ) -> TrainMetric:
         w_gradient_sum = [np.zeros(w.shape) for w in self.w]
         b_gradient_sum = [np.zeros(b.shape) for b in self.b]
         costs = []
@@ -163,18 +167,19 @@ class Ai:
         b_gradient = [b / n for b in b_gradient_sum]
         cost = square_mean_costs(costs)
         gradient_len = math.sqrt(sum([np.sum(gc ** 2) for gc in w_gradient + b_gradient]))
-        if gradient_len:
-            learn_rate = 1 / gradient_len if patch_gradient else 1
-            self._patch(w_gradient, b_gradient, learn_rate)
+        if gradient_len != 0:
+            if learning_rate is None:
+                learning_rate = 1 / gradient_len
+            self._patch(w_gradient, b_gradient, learning_rate)
         self._data_used += len(x_vectors)
         return TrainMetric(
             data_used=self._data_used, w=self.w, b=self.b, w_gradient=w_gradient, b_gradient=b_gradient,
             gradient_len=gradient_len, costs=costs, cost=cost, inputs=x_vectors, outputs=outputs, expected=y_vectors
         )
 
-    def _patch(self, w_gradient: list[np.ndarray], b_gradient: list[np.ndarray], learn_rate):
-        self.w = [w - wd * learn_rate for w, wd in zp.zip2(self.w, w_gradient)]
-        self.b = [b - bd * learn_rate for b, bd in zp.zip2(self.b, b_gradient)]
+    def _patch(self, w_gradient: list[np.ndarray], b_gradient: list[np.ndarray], learning_rate):
+        self.w = [w - wd * learning_rate for w, wd in zp.zip2(self.w, w_gradient)]
+        self.b = [b - bd * learning_rate for b, bd in zp.zip2(self.b, b_gradient)]
 
     def _feed(self, x: np.ndarray) -> tuple[list[np.ndarray], list[np.ndarray]]:
         if x.ndim > 1:
