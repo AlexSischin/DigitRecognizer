@@ -1,6 +1,8 @@
+import dataclasses
 import multiprocessing as mp
 import random
 import sys
+from configparser import ConfigParser
 
 import numpy as np
 import pyqtgraph as pg
@@ -10,6 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
 import ai
+from utils import cfg_parsing
 import qrc_resources
 from ui.main_window import MainWindow
 from utils.iter_utils import is_iterable
@@ -18,12 +21,23 @@ from utils.zip_utils import zip2
 # To save from imports optimization by IDEs
 qrc_resources = qrc_resources
 
-layer_sizes = (784, 16, 16, 10)
-activation_functions = (ai.SigmoidFunc(), ai.SigmoidFunc(), ai.SigmoidFunc())
-train_data_chunk_size = 50
 
-metrics_queue_size = 3
-metrics_queue_batch_size = 5
+@dataclasses.dataclass(frozen=True)
+class AiArgs:
+    layer_sizes: tuple[int, ...]
+    activation_functions: tuple[ai.ActivationFunction, ...]
+
+
+@dataclasses.dataclass(frozen=True)
+class TrainArgs:
+    chunk_size: int
+    chunk_count: int
+
+
+@dataclasses.dataclass(frozen=True)
+class ProcessArgs:
+    queue_size: int
+    queue_batch_size: int
 
 
 def digit_to_yv(d):
@@ -61,16 +75,16 @@ def load_train_and_test_data():
     return train_data, test_data
 
 
-def train(queue, queue_batch_size, ai_instance: ai.Ai, train_data, c_size):
+def train(queue, queue_batch_size, ai_model: ai.Ai, train_data, chunk_size):
     metrics_batch = []
     xy_chunk = []
     for x, y in train_data:
         xy_chunk.append((x, y))
 
-        if len(xy_chunk) >= c_size:
+        if len(xy_chunk) >= chunk_size:
             xs, ys = zip(*xy_chunk)
             xy_chunk.clear()
-            metric = ai_instance.train(xs, ys)
+            metric = ai_model.train(xs, ys)
             metrics_batch.append(metric)
 
             if len(metrics_batch) >= queue_batch_size:
@@ -90,19 +104,58 @@ def create_app():
     return app
 
 
+def create_cfg():
+    converters = {
+        '_int_tuple': cfg_parsing.to_tuple(int),
+        '_act_func_tuple': cfg_parsing.to_tuple_f_dict({'Sigmoid': ai.SigmoidFunc,
+                                                       'ReLU': ai.ReLuFunc})
+    }
+    return ConfigParser(converters=converters)
+
+
+def get_ai_args(cfg: ConfigParser):
+    ai_section = cfg['AI']
+    return AiArgs(
+        layer_sizes=ai_section.get_int_tuple('layer sizes'),
+        activation_functions=ai_section.get_act_func_tuple('activation functions'),
+    )
+
+
+def get_train_args(cfg: ConfigParser):
+    train_section = cfg['Train']
+    return TrainArgs(
+        chunk_size=train_section.getint('chunk size'),
+        chunk_count=train_section.getint('chunk count')
+    )
+
+
+def get_processing_args(cfg: ConfigParser):
+    processing_section = cfg['Processing']
+    return ProcessArgs(
+        queue_size=processing_section.getint('queue size'),
+        queue_batch_size=processing_section.getint('queue batch size')
+    )
+
+
 def main():
+    cfg = create_cfg()
+    cfg.read('resources/app.ini')
+    ai_args = get_ai_args(cfg)
+    train_args = get_train_args(cfg)
+    processing_args = get_processing_args(cfg)
+
     train_data, test_data = load_train_and_test_data()
-    queue = mp.Queue(maxsize=metrics_queue_size)
-    layer_count = len(layer_sizes)
+    queue = mp.Queue(maxsize=processing_args.queue_size)
+    layer_count = len(ai_args.layer_sizes)
 
     app = create_app()
 
-    window = MainWindow(queue, test_data, layer_count, activation_functions)
+    window = MainWindow(queue, test_data, layer_count, ai_args.activation_functions)
     window.show()
 
-    ai_model = ai.Ai(layer_sizes=layer_sizes, activation_functions=activation_functions)
-    train_args = (queue, metrics_queue_batch_size, ai_model, train_data, train_data_chunk_size)
-    train_process = mp.Process(target=train, args=train_args, daemon=True)
+    ai_model = ai.Ai(layer_sizes=ai_args.layer_sizes, activation_functions=ai_args.activation_functions)
+    train_process_args = (queue, processing_args.queue_batch_size, ai_model, train_data, train_args.chunk_size)
+    train_process = mp.Process(target=train, args=train_process_args, daemon=True)
     train_process.start()
 
     sys.exit(app.exec())
