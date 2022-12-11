@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QWidget, QPushButton, QLineEdit, QVBoxLayout, QSizeP
     QHBoxLayout
 
 import ai
-import qrc_resources
+import resources.qrc as qrc_resources
 from ui.test.dataset.img_viewer import ImageViewer
 
 # To save from imports optimization by IDEs

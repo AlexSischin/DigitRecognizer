@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QApplication
 
 import ai
 from utils import cfg_parsing
-import qrc_resources
+import resources.qrc as qrc_resources
 from ui.main_window import MainWindow
 from utils.iter_utils import is_iterable
 from utils.zip_utils import zip2

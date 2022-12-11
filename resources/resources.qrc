@@ -1,0 +1,13 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+    <file alias="test-icon">icon/test.svg</file>
+    <file alias="refresh-icon">icon/refresh.svg</file>
+    <file alias="tile-icon">icon/tile.svg</file>
+    <file alias="correlation-plot-icon">icon/correlation.svg</file>
+    <file alias="distribution-plot-icon">icon/distribution.svg</file>
+    <file alias="recent-cost-plot-icon">icon/recent-cost.svg</file>
+    <file alias="gradient-length-plot-icon">icon/gradient-length.svg</file>
+    <file alias="w-grad-plot-icon">icon/w-grad.svg</file>
+    <file alias="b-grad-plot-icon">icon/b-grad.svg</file>
+</qresource>
+</RCC>

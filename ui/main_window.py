@@ -3,7 +3,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import QMainWindow, QToolBar, QAction, QLabel
 
-import qrc_resources
+import resources.qrc as qrc_resources
 from ui.central_widget import CentralWidget
 from ui.layer_widget import LayerWidget
 from ui.metrics_dispatcher import MetricsDispatchWorkerThread
