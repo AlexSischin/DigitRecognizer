@@ -3,10 +3,10 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import QMainWindow, QToolBar, QAction, QLabel
 
+import ai
 import resources.qrc as qrc_resources
 from ui.central_widget import CentralWidget
 from ui.layer_widget import LayerWidget
-from ui.metrics_dispatcher import MetricsDispatchWorkerThread
 from ui.test.test_window import TestWindow
 
 # To save from imports optimization by IDEs
@@ -15,12 +15,12 @@ qrc_resources = qrc_resources
 
 class MainWindow(QMainWindow):
 
-    def __init__(self, metrics_queue, test_data, layer_count, activation_functions=None):
+    def __init__(self, metrics_queue, test_data, ai_model: ai.Ai):
         super().__init__()
         self._queue = metrics_queue
         self._test_data = test_data
-        self._layer_count = layer_count
-        self._activation_functions = activation_functions
+        self._layer_count = len(ai_model.w)
+        self._activation_functions = ai_model.activation_functions
 
         self._test_windows = []
         self._selected_ai_duv = None
