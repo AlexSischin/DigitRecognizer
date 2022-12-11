@@ -2,6 +2,7 @@ import dataclasses
 import random
 import sys
 from configparser import ConfigParser
+from typing import Callable
 
 import numpy as np
 import tensorflow as tf
@@ -24,6 +25,7 @@ qrc_resources = qrc_resources
 class AiArgs:
     layers: tuple[int, ...]
     activation_functions: tuple[ai.ActivationFunction, ...]
+    learning_rate: dict[float, float | None]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -36,6 +38,58 @@ class TrainArgs:
 class ProcessingArgs:
     queue_max_size: int
     queue_batch_size: int
+
+
+def create_cfg():
+    converters = {
+        '_int_tuple': cfg_parsing.to_tuple(int),
+        '_act_func_tuple': cfg_parsing.to_tuple_f_dict({'Sigmoid': ai.SigmoidFunc,
+                                                        'ReLU': ai.ReLuFunc}),
+        '_float_dict': cfg_parsing.to_dict(float, float, nullable=True)
+    }
+    return ConfigParser(converters=converters)
+
+
+def get_ai_args(cfg: ConfigParser):
+    ai_section = cfg['AI']
+    return AiArgs(
+        layers=ai_section.get_int_tuple('layers'),
+        activation_functions=ai_section.get_act_func_tuple('activation functions'),
+        learning_rate=ai_section.get_float_dict('learning rate')
+    )
+
+
+def get_train_args(cfg: ConfigParser):
+    train_section = cfg['Train']
+    return TrainArgs(
+        chunk_size=train_section.getint('chunk size'),
+        chunk_count=train_section.getint('chunk count')
+    )
+
+
+def get_processing_args(cfg: ConfigParser):
+    processing_section = cfg['Processing']
+    return ProcessingArgs(
+        queue_max_size=processing_section.getint('queue max size'),
+        queue_batch_size=processing_section.getint('queue batch size')
+    )
+
+
+# Using Callable class because one can't pickle local objects (decorator funcs)
+class LearningRate:
+    def __init__(self, learning_rate_map) -> None:
+        super().__init__()
+        self.learning_rate_map = learning_rate_map
+
+    def __call__(self, cost, gradient_length, **_):
+        if gradient_length == 0:
+            return 0
+        key = max([c for c in self.learning_rate_map.keys() if c <= cost])
+        val = self.learning_rate_map[key]
+        if val is None:
+            return 1 / gradient_length
+        else:
+            return val
 
 
 def digit_to_yv(d):
@@ -73,48 +127,17 @@ def load_train_and_test_data(chunk_size, chunk_count):
     return train_data, test_data
 
 
-def create_cfg():
-    converters = {
-        '_int_tuple': cfg_parsing.to_tuple(int),
-        '_act_func_tuple': cfg_parsing.to_tuple_f_dict({'Sigmoid': ai.SigmoidFunc,
-                                                        'ReLU': ai.ReLuFunc})
-    }
-    return ConfigParser(converters=converters)
-
-
-def get_ai_args(cfg: ConfigParser):
-    ai_section = cfg['AI']
-    return AiArgs(
-        layers=ai_section.get_int_tuple('layers'),
-        activation_functions=ai_section.get_act_func_tuple('activation functions'),
-    )
-
-
-def get_train_args(cfg: ConfigParser):
-    train_section = cfg['Train']
-    return TrainArgs(
-        chunk_size=train_section.getint('chunk size'),
-        chunk_count=train_section.getint('chunk count')
-    )
-
-
-def get_processing_args(cfg: ConfigParser):
-    processing_section = cfg['Processing']
-    return ProcessingArgs(
-        queue_max_size=processing_section.getint('queue max size'),
-        queue_batch_size=processing_section.getint('queue batch size')
-    )
-
-
 def main():
     cfg = create_cfg()
     cfg.read('resources/app.ini')
     ai_args = get_ai_args(cfg)
     train_args = get_train_args(cfg)
     processing_args = get_processing_args(cfg)
+    learning_rate = LearningRate(ai_args.learning_rate)
     train_data, test_data = load_train_and_test_data(train_args.chunk_size, train_args.chunk_count)
 
-    ai_model = ai.Ai(layer_sizes=ai_args.layers, activation_functions=ai_args.activation_functions)
+    ai_model = ai.Ai(layer_sizes=ai_args.layers, activation_functions=ai_args.activation_functions,
+                     learning_rate=learning_rate)
 
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
