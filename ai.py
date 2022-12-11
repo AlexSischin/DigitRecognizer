@@ -161,8 +161,7 @@ class Ai:
 
     def train(self,
               x_vectors: list[np.ndarray],
-              y_vectors: list[np.ndarray],
-              learning_rate: float = None
+              y_vectors: list[np.ndarray]
               ) -> TrainMetric:
         w_gradient_sum = [np.zeros(w.shape) for w in self.w]
         b_gradient_sum = [np.zeros(b.shape) for b in self.b]
