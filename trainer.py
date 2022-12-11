@@ -6,7 +6,7 @@ import numpy as np
 from PyQt5.QtWidgets import QApplication
 
 import ai
-from batched_queue import BufferedQueue
+from buffered_queue import BufferedQueue
 from ui.main_window import MainWindow
 
 T = TypeVar('T')
