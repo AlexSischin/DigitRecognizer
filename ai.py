@@ -125,8 +125,8 @@ def generate_weights_and_biases(layer_sizes):
     biases = []
     weights = []
     for layer_size, prev_layer_size in zip(layer_sizes[1:], layer_sizes):
-        biases += [np.random.random_sample(size=layer_size) * 1 - 0.5]
-        weights += [np.random.random_sample(size=(layer_size, prev_layer_size)) * 1 - 0.5]
+        biases.append(np.random.normal(loc=0, scale=0.5, size=layer_size))
+        weights.append(np.random.normal(loc=0, scale=0.5, size=(layer_size, prev_layer_size)))
     return weights, biases
 
 
