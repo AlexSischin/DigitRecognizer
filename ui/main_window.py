@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import QMainWindow, QToolBar, QAction, QLabel
 import ai
 import resources.qrc as qrc_resources
 from ui.central_widget import CentralWidget
-from ui.layer_widget import LayerWidget
 from ui.test.test_window import TestWindow
 
 # To save from imports optimization by IDEs
@@ -19,7 +18,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._queue = metrics_queue
         self._test_data = test_data
-        self._layer_count = len(ai_model.w) + 1
+        self._layer_count = len(ai_model.w)
         self._activation_functions = ai_model.activation_functions
 
         self._test_windows = []
@@ -35,16 +34,11 @@ class MainWindow(QMainWindow):
 
     def _init_widgets(self):
         # Plots
-        self._central_widget = CentralWidget(self._queue)
+        self._central_widget = CentralWidget(self._queue, self._layer_count)
         self.setCentralWidget(self._central_widget)
         self._central_widget.sigAiVersionSelected.connect(self.on_ai_version_selected)
         self._central_widget.sigTrainRun.connect(self.set_train_running_status)
         self._central_widget.sigTrainFinished.connect(self.set_train_finished_status)
-
-        # Layer combobox widget
-        self._layer_widget = LayerWidget()
-        self._layer_widget.sigLayerSelected.connect(lambda l: self._central_widget.update_layer(l))
-        self._layer_widget.set_layer_count(self._layer_count)
 
     def _init_actions(self):
         # Launch test window
@@ -114,23 +108,14 @@ class MainWindow(QMainWindow):
         self._toggle_gradient_length_action.setToolTip(toggle_gradient_length_tip)
         self._toggle_gradient_length_action.triggered.connect(self._central_widget.add_grad_len_widget)
 
-        # Toggle weight gradient
-        toggle_w_grad_icon = QIcon(":w-grad-plot-icon")
-        toggle_w_grad_text = '&Weight gradient plot'
-        toggle_w_grad_tip = 'Open weight gradient plot'
-        self._toggle_w_grad_action = QAction(toggle_w_grad_icon, toggle_w_grad_text, self)
-        self._toggle_w_grad_action.setStatusTip(toggle_w_grad_tip)
-        self._toggle_w_grad_action.setToolTip(toggle_w_grad_tip)
-        self._toggle_w_grad_action.triggered.connect(self._central_widget.add_w_grad_plot)
-
-        # Toggle bias gradient
-        toggle_b_grad_icon = QIcon(":b-grad-plot-icon")
-        toggle_b_grad_text = '&Bias gradient plot'
-        toggle_b_grad_tip = 'Open bias gradient plot'
-        self._toggle_b_grad_action = QAction(toggle_b_grad_icon, toggle_b_grad_text, self)
-        self._toggle_b_grad_action.setStatusTip(toggle_b_grad_tip)
-        self._toggle_b_grad_action.setToolTip(toggle_b_grad_tip)
-        self._toggle_b_grad_action.triggered.connect(self._central_widget.add_b_grad_plot)
+        # Toggle gradient
+        toggle_gradient_icon = QIcon(":gradient-icon")
+        toggle_gradient_text = '&Gradient plot'
+        toggle_gradient_tip = 'Open gradient plot'
+        self._toggle_gradient_action = QAction(toggle_gradient_icon, toggle_gradient_text, self)
+        self._toggle_gradient_action.setStatusTip(toggle_gradient_tip)
+        self._toggle_gradient_action.setToolTip(toggle_gradient_tip)
+        self._toggle_gradient_action.triggered.connect(self._central_widget.add_gradient_widget)
 
     def _init_toolbar(self):
         # AI management
@@ -149,11 +134,7 @@ class MainWindow(QMainWindow):
         self._main_toolbar.addAction(self._toggle_correlation_action)
         self._main_toolbar.addAction(self._toggle_distribution_action)
         self._main_toolbar.addAction(self._toggle_gradient_length_action)
-        self._main_toolbar.addAction(self._toggle_w_grad_action)
-        self._main_toolbar.addAction(self._toggle_b_grad_action)
-
-        self._main_toolbar.addSeparator()
-        self._main_toolbar.addWidget(self._layer_widget)
+        self._main_toolbar.addAction(self._toggle_gradient_action)
 
     def _init_statusbar(self):
         self._statusbar = self.statusBar()

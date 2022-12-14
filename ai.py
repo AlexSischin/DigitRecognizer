@@ -152,7 +152,7 @@ class Ai:
         validate_brain(weights, biases)
         self.w: list[np.ndarray] = weights
         self.b: list[np.ndarray] = biases
-        self.activation_functions: list[ActivationFunction] = activation_functions
+        self.activation_functions: tuple[ActivationFunction] = activation_functions
         self.learning_rate = learning_rate
         self.data_used = 0
 

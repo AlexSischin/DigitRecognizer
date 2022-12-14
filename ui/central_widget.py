@@ -4,13 +4,12 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMdiArea, QSplitter, QMdiSubWi
 import ai
 from ui.ai_hub import AiHub
 from ui.metrics_dispatcher import MetricsDispatchWorkerThread
-from ui.plot.b_grad import BGradWidget, BGradHub
 from ui.plot.correlation import CorrelationWidget, CorrelationHub
 from ui.plot.cost import CostWidget, CostHub
 from ui.plot.distribution import DistributionWidget, DistributionHub
 from ui.plot.grad_len import GradLenWidget, GradLenHub
+from ui.plot.gradient import GradientHub, GradientWidget
 from ui.plot.recent_cost import RecentCostWidget, RecentCostHub
-from ui.plot.w_grad import WGradWidget, WGradHub
 from ui.version_hub import VersionHub, Approx
 
 
@@ -20,16 +19,14 @@ class CentralWidget(QWidget):
     sigTrainFinished = pyqtSignal()
     sigRefreshed = pyqtSignal()
     sigMetricsUpdated = pyqtSignal()
-    sigRegionUpdated = pyqtSignal(int, int, int)
-    sigLayerUpdated = pyqtSignal(int, int, int)
+    sigRegionUpdated = pyqtSignal(int, int)
 
-    def __init__(self, queue, activation_functions=None):
+    def __init__(self, queue, layer_count):
         super().__init__()
         self._queue = queue
-        self._activation_functions = activation_functions
+        self._layer_count = layer_count
         self._left = None
         self._right = None
-        self._layer = None
 
         self._init_hubs()
         self._init_threads()
@@ -50,14 +47,13 @@ class CentralWidget(QWidget):
         self._correlation_hub = CorrelationHub()
         self._distribution_hub = DistributionHub()
         self._grad_len_hub = GradLenHub()
-        self._w_grad_hub = WGradHub()
-        self._b_grad_hub = BGradHub()
+        self._gradient_hub = GradientHub()
 
     def _init_threads(self):
         # Metrics dispatch
         self._metrics_dispatcher = MetricsDispatchWorkerThread(self._queue, hubs=(
             self._version_hub, self._ai_hub, self._cost_hub, self._recent_cost_hub, self._correlation_hub,
-            self._distribution_hub, self._grad_len_hub, self._b_grad_hub, self._w_grad_hub
+            self._distribution_hub, self._grad_len_hub, self._gradient_hub
         ))
         self._metrics_dispatcher.started.connect(self.sigTrainRun.emit)
         self._metrics_dispatcher.updated.connect(self.sigMetricsUpdated.emit)
@@ -111,18 +107,12 @@ class CentralWidget(QWidget):
         self.sigRegionUpdated.connect(widget.update_data)
         self._add_mdi_widget(widget)
 
-    def add_w_grad_plot(self):
-        widget = WGradWidget(self._w_grad_hub)
-        widget.update_data(self._left, self._right, self._layer)
-        self.sigRegionUpdated.connect(widget.update_data)
-        self.sigLayerUpdated.connect(widget.update_data)
-        self._add_mdi_widget(widget)
-
-    def add_b_grad_plot(self):
-        widget = BGradWidget(self._b_grad_hub)
-        widget.update_data(self._left, self._right, self._layer)
-        self.sigRegionUpdated.connect(widget.update_data)
-        self.sigLayerUpdated.connect(widget.update_data)
+    def add_gradient_widget(self):
+        widget = GradientWidget(self._gradient_hub)
+        widget.set_layer_count(self._layer_count)
+        widget.set_layer(self._layer_count - 1)
+        widget.set_region(self._left, self._right)
+        self.sigRegionUpdated.connect(widget.set_region)
         self._add_mdi_widget(widget)
 
     def _add_mdi_widget(self, widget):
@@ -144,11 +134,7 @@ class CentralWidget(QWidget):
 
         if self._left != left or self._right != right:
             self._left, self._right = left, right
-            self.sigRegionUpdated.emit(left, right, self._layer)
-
-    def update_layer(self, layer: int):
-        self._layer = layer
-        self.sigLayerUpdated.emit(self._left, self._right, layer)
+            self.sigRegionUpdated.emit(self._left, self._right)
 
     def get_ai_v_by_duv(self, data_used_version: int, act_funcs: tuple[ai.ActivationFunction]) -> ai.Ai:
         v = self._version_hub.get_version(data_used_version)

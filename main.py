@@ -2,7 +2,6 @@ import dataclasses
 import random
 import sys
 from configparser import ConfigParser
-from typing import Callable
 
 import numpy as np
 import tensorflow as tf
