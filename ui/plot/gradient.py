@@ -1,112 +1,158 @@
-from enum import Enum
+from numbers import Number
+from typing import Iterable
 
 import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QComboBox, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QSizePolicy, QFrame
 from pyqtgraph import PlotWidget
 
 import ai
 from ui.metrics_dispatcher import Hub
-from utils.enum_utils import find_enum_by_value
+from ui.plot.gradient_info import GradientInfo
+from ui.plot.gradient_params import Component, Mode, Aggregation, GradientParams
 
 
-class Component(Enum):
-    WEIGHTS = 'Weights'
-    BIASES = 'Biases'
+def flatten(it: Iterable | np.ndarray) -> np.ndarray:
+    if isinstance(it, np.ndarray):
+        return it.flatten()
+    elif isinstance(it, Iterable):
+        result = np.array([])
+        for i in it:
+            if isinstance(i, Number):
+                result = np.append(result, i)
+            elif isinstance(i, Iterable):
+                result = np.concatenate((result, flatten(i)))
+            else:
+                raise ValueError('Value must contain only numbers and iterables at any depth')
+        return result
+    else:
+        raise ValueError('Value must be iterable')
 
 
-class Mode(Enum):
-    GRADIENT = 'Gradient'
-    STATE = 'State'
+def get_distribution_params(a: np.ndarray):
+    return np.array([a.size, np.mean(a), np.std(a)])
 
 
-class Aggregation(Enum):
-    NONE = 'None'
-    SUM = 'Sum'
-    MEAN = 'Mean'
+def get_distribution_params_for_batch(*arrays):
+    return [get_distribution_params(a) for a in arrays]
 
 
-def reg_option(d: dict, component: Component, mode: Mode, aggregation: Aggregation):
-    def wrapper(fn):
-        d[component, mode, aggregation] = fn
-        return fn
+def add_dimension_for_batch(*arrays, axis=0):
+    return [np.expand_dims(a, axis=axis) for a in arrays]
 
-    return wrapper
+
+def combine_distributions_params(
+        sizes: np.ndarray,
+        means: np.ndarray,
+        sds: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if sizes.ndim != 1 or means.ndim != 1 or sds.ndim != 1:
+        raise ValueError('All arrays must be 1d')
+    if sizes.size != means.size or sizes.size != sds.size:
+        raise ValueError('All arrays must be the same size')
+
+    sizes_c = np.sum(sizes)
+    means_c = np.sum(sizes * means) / sizes_c
+    sds_c = (np.sum((means ** 2 + sds ** 2) * sizes) / sizes_c - means_c ** 2) ** 0.5
+    return sizes_c, means_c, sds_c
+
+
+def get_info_aggr(data_slice: np.ndarray, aggregation: Aggregation):
+    if aggregation is Aggregation.NONE:
+        return data_slice
+    elif aggregation is Aggregation.SUM:
+        return np.sum(data_slice, axis=0)
+    elif aggregation is Aggregation.MEAN:
+        return np.mean(data_slice, axis=0)
+    else:
+        raise ValueError(f'Invalid aggregation: {aggregation}')
 
 
 class GradientHub(Hub):
-    methods = {}
 
     def __init__(self) -> None:
-        self._ws = []
-        self._wgs = []
-        self._bs = []
-        self._bgs = []
+        self._data_used = []  # size=time
+        self._ws = []  # size=(time, layer, (y, x));  y and x are different for different layers
+        self._wg = []  # size=(time, layer, (y, x));  y and x are different for different layers
+        self._bs = []  # size=(time, layer, (y, x));  y and x are different for different layers
+        self._bg = []  # size=(time, layer, (y, x));  y and x are different for different layers
+        self._ws_stats = []  # size=(time, layer, stat); stat=3
+        self._wg_stats = []  # size=(time, layer, stat); stat=3
+        self._bs_stats = []  # size=(time, layer, stat); stat=3
+        self._bg_stats = []  # size=(time, layer, stat); stat=3
 
     def update_data(self, metrics: list[ai.TrainMetric]):
-        self._ws.extend([m.w for m in metrics])
-        self._wgs.extend([m.w_gradient for m in metrics])
-        self._bs.extend([m.b for m in metrics])
-        self._bgs.extend([m.b_gradient for m in metrics])
+        for m in metrics:
+            self._data_used.append(m.data_used)
+            self._ws.append(m.w)
+            self._wg.append(m.w_gradient)
 
-    @reg_option(methods, Component.WEIGHTS, Mode.GRADIENT, Aggregation.NONE)
-    def get_w_grads(self, left, right, layer):
-        return np.array([g[layer] for g in self._wgs[left:right]])
+            ws_stats = get_distribution_params_for_batch(*m.w)
+            self._ws_stats.append(ws_stats)
 
-    @reg_option(methods, Component.WEIGHTS, Mode.GRADIENT, Aggregation.SUM)
-    def get_w_grads_sum(self, left, right, layer):
-        grads = self.get_w_grads(left, right, layer)
-        return np.sum(grads, axis=0)
+            wg_stats = get_distribution_params_for_batch(*m.w_gradient)
+            self._wg_stats.append(wg_stats)
 
-    @reg_option(methods, Component.WEIGHTS, Mode.GRADIENT, Aggregation.MEAN)
-    def get_w_grads_mean(self, left, right, layer):
-        grads = self.get_w_grads(left, right, layer)
-        return np.mean(grads, axis=0)
+            bs_stats = get_distribution_params_for_batch(*m.b)
+            self._bs_stats.append(bs_stats)
 
-    @reg_option(methods, Component.WEIGHTS, Mode.STATE, Aggregation.NONE)
-    def get_w_states(self, left, right, layer):
-        return np.array([g[layer] for g in self._ws[left:right]])
+            bg_stats = get_distribution_params_for_batch(*m.b_gradient)
+            self._bg_stats.append(bg_stats)
 
-    @reg_option(methods, Component.WEIGHTS, Mode.STATE, Aggregation.SUM)
-    def get_w_states_sum(self, left, right, layer):
-        states = self.get_w_states(left, right, layer)
-        return np.sum(states, axis=0)
+            bs_2d = add_dimension_for_batch(*m.b)
+            self._bs.append(bs_2d)
 
-    @reg_option(methods, Component.WEIGHTS, Mode.STATE, Aggregation.MEAN)
-    def get_w_states_mean(self, left, right, layer):
-        states = self.get_w_states(left, right, layer)
-        return np.mean(states, axis=0)
+            bg_2d = add_dimension_for_batch(*m.b_gradient)
+            self._bg.append(bg_2d)
 
-    @reg_option(methods, Component.BIASES, Mode.GRADIENT, Aggregation.NONE)
-    def get_b_grads(self, left, right, layer):
-        one_d_grads = np.array([g[layer] for g in self._bgs[left:right]])
-        return np.expand_dims(one_d_grads, axis=1)
+    def get_info(self,
+                 left: int,
+                 right: int,
+                 layer: int,
+                 component: Component,
+                 mode: Mode,
+                 aggregation: Aggregation
+                 ) -> tuple[np.ndarray, tuple[float, float, float], tuple[float, float, float]]:
+        data_source = {
+            (Component.WEIGHTS, Mode.GRADIENT): (self._wg, self._wg_stats),
+            (Component.WEIGHTS, Mode.STATE): (self._ws, self._ws_stats),
+            (Component.BIASES, Mode.GRADIENT): (self._bg, self._bg_stats),
+            (Component.BIASES, Mode.STATE): (self._bs, self._bs_stats),
+        }
+        # size=(time, layer, (y, x));  y and x are different for different layers
+        data, data_stats = data_source[component, mode]
+        data_slice, data_stats_slice = data[left:right], data_stats[left:right]
 
-    @reg_option(methods, Component.BIASES, Mode.GRADIENT, Aggregation.SUM)
-    def get_b_grads_sum(self, left, right, layer):
-        grads = self.get_b_grads(left, right, layer)
-        return np.sum(grads, axis=0)
+        # size=(time, y, x)
+        data_layer_slice = np.array([d[layer] for d in data_slice])
 
-    @reg_option(methods, Component.BIASES, Mode.GRADIENT, Aggregation.MEAN)
-    def get_b_grads_mean(self, left, right, layer):
-        grads = self.get_b_grads(left, right, layer)
-        return np.mean(grads, axis=0)
+        # size=(y, x) or (time, y, x) no aggregation
+        aggregated_data = get_info_aggr(data_layer_slice, aggregation)
 
-    @reg_option(methods, Component.BIASES, Mode.STATE, Aggregation.NONE)
-    def get_b_states(self, left, right, layer):
-        one_d_states = np.array([g[layer] for g in self._bs[left:right]])
-        return np.expand_dims(one_d_states, axis=1)
+        # shape=(layer, stat, time); stat=3
+        grouped_stats = np.array(data_stats_slice).transpose(1, 2, 0)
 
-    @reg_option(methods, Component.BIASES, Mode.STATE, Aggregation.SUM)
-    def get_b_states_sum(self, left, right, layer):
-        states = self.get_b_states(left, right, layer)
-        return np.sum(states, axis=0)
+        # shape=(layer, stat); stat=3
+        combined_stats = [combine_distributions_params(s[0], s[1], s[1]) for s in grouped_stats]
 
-    @reg_option(methods, Component.BIASES, Mode.STATE, Aggregation.MEAN)
-    def get_b_states_mean(self, left, right, layer):
-        states = self.get_b_states(left, right, layer)
-        return np.mean(states, axis=0)
+        # shape=stat; stat=3
+        layer_combined_stats = combined_stats[layer]
+
+        # shape=(stat, layer); stat=3
+        grouped_combined_stats = np.array(combined_stats).transpose(1, 0)
+
+        # shape=stat; stat=3
+        combined_combined_stats = combine_distributions_params(
+            grouped_combined_stats[0],
+            grouped_combined_stats[1],
+            grouped_combined_stats[2]
+        )
+
+        return aggregated_data, layer_combined_stats, combined_combined_stats
+
+    def get_x_vals(self, left, right):
+        return np.array(self._data_used[left:right])
 
 
 class GradientWidget(QWidget):
@@ -125,89 +171,29 @@ class GradientWidget(QWidget):
 
         layout = QHBoxLayout()
         layout.setContentsMargins(10, 10, 0, 0)
-        layout.addWidget(self._init_params_widget(), alignment=Qt.AlignTop)
+        layout.addWidget(self._init_left_bar_widget(), alignment=Qt.AlignTop)
         layout.addWidget(self._init_img_view_widget())
         self.setLayout(layout)
 
-        self._set_component(Component.WEIGHTS)
-        self._set_mode(Mode.GRADIENT)
-        self._set_aggregation(Aggregation.NONE)
-
-    def _init_params_widget(self):
+    def _init_left_bar_widget(self):
         widget = QWidget()
-        widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self._init_component_widget())
-        layout.addWidget(self._init_mode_widget())
-        layout.addWidget(self._init_aggregation_widget())
-        layout.addWidget(self._init_layer_widget())
-        widget.setLayout(layout)
-        return widget
 
-    def _init_component_widget(self):
-        widget = QWidget()
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
+        self._gradient_params = GradientParams()
+        self._gradient_params.setContentsMargins(0, 0, 0, 0)
+        self._gradient_params.sigOptionsUpdated.connect(self._update_params)
+        self._gradient_params.sigOptionsDrop.connect(self._drop_params)
+        layout.addWidget(self._gradient_params)
 
-        label = QLabel('Component:')
-        layout.addWidget(label)
+        h_line = QFrame()
+        h_line.setFrameShape(QFrame.HLine)
+        h_line.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(h_line)
 
-        self._component_cb = QComboBox()
-        self._component_cb.addItem(Component.WEIGHTS.value)
-        self._component_cb.addItem(Component.BIASES.value)
-        self._component_cb.currentTextChanged.connect(self._set_component_str)
-        layout.addWidget(self._component_cb)
-
-        widget.setLayout(layout)
-        return widget
-
-    def _init_mode_widget(self):
-        widget = QWidget()
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        label = QLabel('Mode:')
-        layout.addWidget(label)
-
-        self._mode_cb = QComboBox()
-        self._mode_cb.addItem(Mode.GRADIENT.value)
-        self._mode_cb.addItem(Mode.STATE.value)
-        self._mode_cb.currentTextChanged.connect(self._set_mode_str)
-        layout.addWidget(self._mode_cb)
-
-        widget.setLayout(layout)
-        return widget
-
-    def _init_aggregation_widget(self):
-        widget = QWidget()
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        label = QLabel('Aggregation:')
-        layout.addWidget(label)
-
-        self._aggregation_cb = QComboBox()
-        self._aggregation_cb.addItem(Aggregation.NONE.value)
-        self._aggregation_cb.addItem(Aggregation.MEAN.value)
-        self._aggregation_cb.addItem(Aggregation.SUM.value)
-        self._aggregation_cb.currentTextChanged.connect(self._set_aggregation_str)
-        layout.addWidget(self._aggregation_cb)
-
-        widget.setLayout(layout)
-        return widget
-
-    def _init_layer_widget(self):
-        widget = QWidget()
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        label = QLabel('Layer:')
-        layout.addWidget(label)
-
-        self._layer_cb = QComboBox()
-        self._layer_cb.currentTextChanged.connect(self._set_layer_str)
-        layout.addWidget(self._layer_cb)
+        self._gradient_info = GradientInfo()
+        self._gradient_info.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._gradient_info)
 
         widget.setLayout(layout)
         return widget
@@ -229,82 +215,40 @@ class GradientWidget(QWidget):
     def _update_data(self):
         if self._left is not None \
                 and self._right is not None \
+                and self._left != self._right \
                 and self._layer is not None \
                 and self._component is not None \
                 and self._mode is not None \
                 and self._aggregation is not None:
-            fn = self._hub.methods[self._component, self._mode, self._aggregation]
-            grads = fn(self._hub, self._left, self._right, self._layer)
-            self._imv.setImage(grads, xvals=np.linspace(self._left, self._right, grads.shape[0]))
+            info, layer_stats, stats = self._hub.get_info(
+                self._left, self._right, self._layer, self._component, self._mode, self._aggregation
+            )
+            x_vals = self._hub.get_x_vals(self._left, self._right)
+            self._imv.setImage(info, xvals=x_vals)
+            self._gradient_info.set_layer_info(*layer_stats)
+            self._gradient_info.set_info(*stats)
         else:
             self._imv.clear()
-
-    def set_layer_count(self, layer_count: int):
-        if layer_count is None or layer_count < 0:
-            raise ValueError('Layer count must be a positive integer')
-        if self._layer_count != layer_count:
-            self._layer_count = layer_count
-            self._layer_cb.clear()
-            for layer in range(self._layer_count):
-                self._layer_cb.addItem(f'{layer}')
-            if self._layer is not None and self._layer <= self._layer_count:
-                self.set_layer(None)
+            self._gradient_info.clear_layer_info()
+            self._gradient_info.clear_info()
 
     def set_region(self, left: int, right: int):
         self._left, self._right = left, right
         self._update_data()
 
-    def set_component(self, component: Component):
-        self._set_component(component)
-
-    def _set_component_str(self, component_str: str):
-        component = find_enum_by_value(Component, component_str)
-        self._set_component(component)
-
-    def _set_component(self, component: Component):
-        if not isinstance(component, Component):
-            raise ValueError(f'Component must be instance of Component. Got: {component}')
+    def _update_params(self, component: Component, mode: Mode, aggregation: Aggregation, layer: int | None):
         self._component = component
-        self._update_data()
-
-    def set_mode(self, mode: Mode):
-        self._set_mode(mode)
-
-    def _set_mode_str(self, mode_str: str):
-        mode = find_enum_by_value(Mode, mode_str)
-        self._set_mode(mode)
-
-    def _set_mode(self, mode: Mode):
-        if not isinstance(mode, Mode):
-            raise ValueError(f'Mode must be instance of Mode. Got: {mode}')
         self._mode = mode
-        self._update_data()
-
-    def set_aggregation(self, aggregation: Aggregation):
-        self._set_aggregation(aggregation)
-
-    def _set_aggregation_str(self, aggregation_str: str):
-        aggregation = find_enum_by_value(Aggregation, aggregation_str)
-        self._set_aggregation(aggregation)
-
-    def _set_aggregation(self, aggregation: Aggregation):
-        if not isinstance(aggregation, Aggregation):
-            raise ValueError(f'Aggregation must be instance of Aggregation. Got: {aggregation}')
         self._aggregation = aggregation
+        self._layer = layer
         self._update_data()
+
+    def _drop_params(self):
+        self._component = self._mode = self._aggregation = self._layer = None
+        self._update_data()
+
+    def set_layer_count(self, layer_count: int):
+        self._gradient_params.set_layer_count(layer_count)
 
     def set_layer(self, layer: int | None):
-        if not (layer is None or 0 <= layer < self._layer_count):
-            raise ValueError(f'Layer must be an integer in range: [0, {self._layer_count}) or None. Got: {layer}')
-        self._layer_cb.setCurrentText(str(layer))
-
-    def _set_layer_str(self, layer_str: str | None):
-        layer = int(layer_str) if layer_str != '' and layer_str is not None else None
-        self._set_layer(layer)
-
-    def _set_layer(self, layer: int | None):
-        if not (layer is None or 0 <= layer < self._layer_count):
-            raise ValueError(f'Layer must be an integer in range: [0, {self._layer_count}) or None. Got: {layer}')
-        if self._layer != layer:
-            self._layer = layer
-        self._update_data()
+        self._gradient_params.set_layer(layer)
