@@ -6,7 +6,6 @@ from typing import Callable
 import numpy as np
 
 from utils import zip_utils as zp
-from utils.iter_utils import is_iterable
 
 
 class ActivationFunction:
