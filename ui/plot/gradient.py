@@ -134,7 +134,7 @@ class GradientHub(Hub):
         grouped_stats = np.array(data_stats_slice).transpose(1, 2, 0)
 
         # shape=(layer, stat); stat=3
-        combined_stats = [combine_distributions_params(s[0], s[1], s[1]) for s in grouped_stats]
+        combined_stats = [combine_distributions_params(s[0], s[1], s[2]) for s in grouped_stats]
 
         # shape=stat; stat=3
         layer_combined_stats = combined_stats[layer]
