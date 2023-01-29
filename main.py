@@ -1,7 +1,5 @@
-import dataclasses
 import random
 import sys
-from configparser import ConfigParser
 
 import numpy as np
 import tensorflow as tf
@@ -11,70 +9,22 @@ from PyQt5.QtWidgets import QApplication
 
 import ai
 import resources.qrc as qrc_resources
+from resources import app_ini
+from resources.app_ini import AiCfg, Distribution, DistributionType, DistributionParam
 from trainer import AiTrainer, random_extended_chunked_list
-from utils import cfg_parsing
 from utils.iter_utils import is_iterable
-from utils.zip_utils import zip2
+from utils.zip_utils import zip2, zip3
 
 # To save from imports optimization by IDEs
 qrc_resources = qrc_resources
 
-
-@dataclasses.dataclass(frozen=True)
-class AiArgs:
-    layers: tuple[int, ...]
-    activation_functions: tuple[ai.ActivationFunction, ...]
-    learning_rate: dict[float, float | None]
+activation_funcs = {
+    app_ini.ActivationFunction.SIGMOID: ai.SigmoidFunc(),
+    app_ini.ActivationFunction.RELU: ai.ReLuFunc()
+}
 
 
-@dataclasses.dataclass(frozen=True)
-class TrainArgs:
-    chunk_size: int
-    chunk_count: int
-
-
-@dataclasses.dataclass(frozen=True)
-class ProcessingArgs:
-    queue_max_size: int
-    queue_batch_size: int
-
-
-def create_cfg():
-    converters = {
-        '_int_tuple': cfg_parsing.to_tuple(int),
-        '_act_func_tuple': cfg_parsing.to_tuple_f_dict({'Sigmoid': ai.SigmoidFunc,
-                                                        'ReLU': ai.ReLuFunc}),
-        '_float_dict': cfg_parsing.to_dict(float, float, nullable=True)
-    }
-    return ConfigParser(converters=converters)
-
-
-def get_ai_args(cfg: ConfigParser):
-    ai_section = cfg['AI']
-    return AiArgs(
-        layers=ai_section.get_int_tuple('layers'),
-        activation_functions=ai_section.get_act_func_tuple('activation functions'),
-        learning_rate=ai_section.get_float_dict('learning rate')
-    )
-
-
-def get_train_args(cfg: ConfigParser):
-    train_section = cfg['Train']
-    return TrainArgs(
-        chunk_size=train_section.getint('chunk size'),
-        chunk_count=train_section.getint('chunk count')
-    )
-
-
-def get_processing_args(cfg: ConfigParser):
-    processing_section = cfg['Processing']
-    return ProcessingArgs(
-        queue_max_size=processing_section.getint('queue max size'),
-        queue_batch_size=processing_section.getint('queue batch size')
-    )
-
-
-# Using Callable class because one can't pickle local objects (decorator funcs)
+# Using Callable class because it's impossible to pickle local objects (decorator funcs)
 class LearningRate:
     def __init__(self, learning_rate_map) -> None:
         super().__init__()
@@ -85,7 +35,7 @@ class LearningRate:
             return 0
         key = max([c for c in self.learning_rate_map.keys() if c <= cost])
         val = self.learning_rate_map[key]
-        if val is None:
+        if val <= 0:
             return 1 / gradient_length
         else:
             return val
@@ -126,17 +76,50 @@ def load_train_and_test_data(chunk_size, chunk_count):
     return train_data, test_data
 
 
-def main():
-    cfg = create_cfg()
-    cfg.read('resources/app.ini')
-    ai_args = get_ai_args(cfg)
-    train_args = get_train_args(cfg)
-    processing_args = get_processing_args(cfg)
-    learning_rate = LearningRate(ai_args.learning_rate)
-    train_data, test_data = load_train_and_test_data(train_args.chunk_size, train_args.chunk_count)
+def generate_numbers(shape: int | tuple[int, ...], distribution: Distribution):
+    d_type = distribution.type
+    if d_type == DistributionType.UNIFORM:
+        a = distribution.params[DistributionParam.LB.value]
+        b = distribution.params[DistributionParam.RB.value]
+        return np.random.uniform(low=a, high=b, size=shape)
+    elif d_type == DistributionType.GAUSSIAN:
+        m = distribution.params[DistributionParam.MEAN.value]
+        sd = distribution.params[DistributionParam.SD.value]
+        return np.random.normal(loc=m, scale=sd, size=shape)
+    raise ValueError(f'Invalid distribution: {distribution}')
 
-    ai_model = ai.Ai(layer_sizes=ai_args.layers, activation_functions=ai_args.activation_functions,
-                     learning_rate=learning_rate)
+
+def generate_weights_and_biases(cfg: AiCfg):
+    layers = cfg.layers
+    w_distributions = cfg.weight_distributions
+    b_distributions = cfg.bias_distributions
+    if len(layers) < 2:
+        raise ValueError('Expected 2 or more layers')
+
+    weights = []
+    for layer_size, prev_layer_size, w_distr in zip3(layers[1:], layers[:-1], w_distributions):
+        w = generate_numbers(shape=(layer_size, prev_layer_size), distribution=w_distr)
+        weights.append(w)
+
+    biases = []
+    for layer_size, b_distr in zip2(layers[1:], b_distributions):
+        b = generate_numbers(shape=layer_size, distribution=b_distr)
+        biases.append(b)
+
+    return tuple(weights), tuple(biases)
+
+
+def main():
+    cfg = app_ini.cfg
+
+    learning_rate = LearningRate(cfg.ai.learning_rate)
+    train_data, test_data = load_train_and_test_data(cfg.train.chunk_size, cfg.train.chunk_count)
+
+    activation_functions = tuple([activation_funcs[f] for f in cfg.ai.activation_functions])
+
+    w, b = generate_weights_and_biases(cfg.ai)
+    # TODO pass learning_rate to trainer, not AI
+    ai_model = ai.Ai(w, b, activation_functions=activation_functions, learning_rate=learning_rate)
 
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
@@ -144,8 +127,8 @@ def main():
         ai_model=ai_model,
         train_data=train_data,
         test_data=test_data,
-        queue_max_size=processing_args.queue_max_size,
-        queue_batch_size=processing_args.queue_batch_size
+        queue_max_size=cfg.processing.queue_max_size,
+        queue_batch_size=cfg.processing.queue_batch_size
     )
     trainer_app.setAttribute(Qt.AA_UseHighDpiPixmaps)
     sys.exit(trainer_app.exec())

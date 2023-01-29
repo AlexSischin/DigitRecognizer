@@ -50,7 +50,7 @@ class ReLuFunc(ActivationFunction):
         return 0 if x < 0 else 1
 
 
-def validate_brain(weights: list[np.ndarray], biases: list[np.ndarray]):
+def validate_brain(weights: tuple[np.ndarray], biases: tuple[np.ndarray]):
     depth = len(weights)
     if len(biases) != depth:
         raise ValueError('Weights and biases must have the same depth')
@@ -100,16 +100,16 @@ def calc_next_activation_derivatives(n: int, n_next: int, z_der: np.ndarray, wei
 @dataclass(frozen=True)
 class TrainMetric:
     data_used: int
-    w: list[np.ndarray]
-    b: list[np.ndarray]
-    w_gradient: list[np.ndarray]
-    b_gradient: list[np.ndarray]
+    w: tuple[np.ndarray, ...]
+    b: tuple[np.ndarray, ...]
+    w_gradient: tuple[np.ndarray, ...]
+    b_gradient: tuple[np.ndarray, ...]
     gradient_len: float
-    costs: list[np.ndarray]
+    costs: tuple[np.ndarray, ...]
     cost: float
-    inputs: list[np.ndarray]
-    outputs: list[np.ndarray]
-    expected: list[np.ndarray]
+    inputs: tuple[np.ndarray, ...]
+    outputs: tuple[np.ndarray, ...]
+    expected: tuple[np.ndarray, ...]
 
 
 def square_mean_costs(costs: list[np.ndarray]) -> np.ndarray:
@@ -118,39 +118,25 @@ def square_mean_costs(costs: list[np.ndarray]) -> np.ndarray:
     return np.mean(np.sum(squared_costs, axis=1))
 
 
-def generate_weights_and_biases(layer_sizes):
-    if len(layer_sizes) < 2:
-        raise ValueError('Expected 2 or more layers')
-    biases = []
-    weights = []
-    for layer_size, prev_layer_size in zip(layer_sizes[1:], layer_sizes):
-        biases.append(np.random.normal(loc=0, scale=0.5, size=layer_size))
-        weights.append(np.random.normal(loc=0, scale=0.5, size=(layer_size, prev_layer_size)))
-    return weights, biases
-
-
 def default_learning_rate(gradient_length, **_):
     return 1 / gradient_length if gradient_length != 0 else 0
 
 
 class Ai:
     def __init__(self,
-                 layer_sizes: tuple[int, ...] = None,
-                 weights: tuple[np.ndarray, ...] = None,
-                 biases: tuple[np.ndarray, ...] = None,
+                 weights: tuple[np.ndarray, ...],
+                 biases: tuple[np.ndarray, ...],
                  activation_functions: tuple[ActivationFunction, ...] = None,
                  learning_rate: Number | Callable = None
                  ) -> None:
-        if layer_sizes is not None:
-            weights, biases = generate_weights_and_biases(layer_sizes)
         if activation_functions is None:
             activation_functions = [SigmoidFunc() for _ in biases]
         if learning_rate is None:
             learning_rate = default_learning_rate
 
         validate_brain(weights, biases)
-        self.w: list[np.ndarray] = weights
-        self.b: list[np.ndarray] = biases
+        self.w: tuple[np.ndarray] = weights
+        self.b: tuple[np.ndarray] = biases
         self.activation_functions: tuple[ActivationFunction] = activation_functions
         self.learning_rate = learning_rate
         self.data_used = 0
@@ -183,8 +169,9 @@ class Ai:
             self._patch(w_gradient, b_gradient, learning_rate)
         self.data_used += len(x_vectors)
         return TrainMetric(
-            data_used=self.data_used, w=self.w, b=self.b, w_gradient=w_gradient, b_gradient=b_gradient,
-            gradient_len=gradient_len, costs=costs, cost=cost, inputs=x_vectors, outputs=outputs, expected=y_vectors
+            data_used=self.data_used, w=self.w, b=self.b, w_gradient=tuple(w_gradient), b_gradient=tuple(b_gradient),
+            gradient_len=gradient_len, costs=tuple(costs), cost=cost, inputs=tuple(x_vectors),
+            outputs=tuple(outputs), expected=tuple(y_vectors)
         )
 
     def _patch(self, w_gradient: list[np.ndarray], b_gradient: list[np.ndarray], learning_rate):
