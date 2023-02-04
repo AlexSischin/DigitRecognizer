@@ -69,34 +69,6 @@ def validate_brain(weights: tuple[np.ndarray], biases: tuple[np.ndarray]):
             raise ValueError(f'Weight columns count must be equal to bias length (depth={depth})')
 
 
-def calc_z_factor_derivatives(n: int, a_der: np.ndarray, z_factor: np.ndarray, act_func_der):
-    z_der = np.empty(shape=n)
-    for j in range(n):
-        z_der[j] = act_func_der(z_factor[j]) * a_der[j]
-    return z_der
-
-
-def calc_weight_derivatives(n: int, n_next: int, z_der: np.ndarray, a_next: np.ndarray):
-    w_der = np.empty(shape=(n, n_next))
-    for k in range(n_next):
-        for j in range(n):
-            w_der[j, k] = a_next[k] * z_der[j]
-    return w_der
-
-
-def calc_root_activation_derivatives(actual_result: np.ndarray, expected_result: np.ndarray):
-    return np.array([2 * (a - y) for a, y in zp.zip2(actual_result, expected_result)])
-
-
-def calc_next_activation_derivatives(n: int, n_next: int, z_der: np.ndarray, weight: np.ndarray):
-    a_der_next = np.empty(shape=n_next)
-    for k in range(n_next):
-        a_der_next[k] = 0
-        for j in range(n):
-            a_der_next[k] += weight[j, k] * z_der[j]
-    return a_der_next
-
-
 @dataclass(frozen=True)
 class TrainMetric:
     data_used: int
@@ -137,7 +109,7 @@ class Ai:
         validate_brain(weights, biases)
         self.w: tuple[np.ndarray] = weights
         self.b: tuple[np.ndarray] = biases
-        self.activation_functions: tuple[ActivationFunction] = activation_functions
+        self.f: tuple[ActivationFunction] = activation_functions
         self.learning_rate = learning_rate
         self.data_used = 0
 
@@ -192,26 +164,21 @@ class Ai:
             raise ValueError("All elements must have value in range: [0, 1]")
         z_factors = []
         activations = [x]
-        for w, b, act_func in zp.zip3(self.w, self.b, self.activation_functions):
+        for w, b, f in zp.zip3(self.w, self.b, self.f):
             z = np.dot(w, x) + b
-            x = act_func.of_vec(z)
+            x = f.of_vec(z)
             z_factors.append(z)
             activations.append(x)
         return z_factors, activations
 
-    def _backpropagate(self, z_factors: list[np.ndarray], activations: list[np.ndarray], expected_result: np.ndarray):
-        w_derivatives, b_derivatives = [], []
-        a_der = calc_root_activation_derivatives(activations[-1], expected_result)
-        for l_weights, l_act_func, l_z_factors, next_l_activations in zp.zip4(
-                self.w[::-1], self.activation_functions[::-1], z_factors[::-1], activations[-2::-1]):
-            n, n_next = l_weights.shape
+    def _backpropagate(self, z: list[np.ndarray], a: list[np.ndarray], y: np.ndarray):
+        dj_dw_list, dj_db_list = [], []
+        dj_da = (a[-1] - y) * 2
+        for w_l, f, z_l, a_pl in zp.zip4(self.w[::-1], self.f[::-1], z[::-1], a[-2::-1]):
+            dj_db = dj_dz = f.der_of(z_l) * dj_da
+            dj_dw = np.expand_dims(dj_dz, 1) @ np.expand_dims(a_pl, 0)
+            dj_da = w_l.T @ dj_dz
+            dj_dw_list.insert(0, dj_dw)
+            dj_db_list.insert(0, dj_db)
 
-            b_der = z_der = calc_z_factor_derivatives(n, a_der, l_z_factors, l_act_func.der_of)
-            w_der = calc_weight_derivatives(n, n_next, z_der, next_l_activations)
-
-            w_derivatives.insert(0, w_der)
-            b_derivatives.insert(0, b_der)
-
-            a_der = calc_next_activation_derivatives(n, n_next, z_der, l_weights)
-
-        return w_derivatives, b_derivatives
+        return dj_dw_list, dj_db_list

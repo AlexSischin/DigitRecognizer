@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
         self._queue = metrics_queue
         self._test_data = test_data
         self._layer_count = len(ai_model.w)
-        self._activation_functions = ai_model.activation_functions
+        self._activation_functions = ai_model.f
 
         self._test_windows = []
         self._selected_ai_duv = None
