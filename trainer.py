@@ -1,6 +1,5 @@
 import multiprocessing as mp
-import random
-from typing import Iterable, Generator, TypeVar
+from typing import Iterable
 
 import numpy as np
 from PyQt5.QtWidgets import QApplication
@@ -8,31 +7,6 @@ from PyQt5.QtWidgets import QApplication
 import ai
 from buffered_queue import BufferedQueue
 from ui.main_window import MainWindow
-
-T = TypeVar('T')
-
-
-def random_iterator(values: list[T]) -> Generator[T, None, None]:
-    values_copy = values.copy()
-    random.shuffle(values_copy)
-    yield from values_copy
-
-
-def random_extended_chunked_list(values: list[T], chunk_size: int, chunk_count: int) -> list[list[T]]:
-    result_list = []
-    it = iter([])
-    while len(result_list) < chunk_count:
-        chunk = []
-        while len(chunk) < chunk_size:
-            try:
-                v = next(it)
-            except StopIteration:
-                it = random_iterator(values)
-                v = next(it)
-            chunk.append(v)
-        result_list.append(chunk)
-
-    return result_list
 
 
 def train(queue, train_data, ai_model):

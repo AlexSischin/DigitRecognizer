@@ -1,6 +1,5 @@
 import dataclasses
 
-import numpy as np
 from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QIntValidator
 from PyQt5.QtWidgets import QWidget, QPushButton, QLineEdit, QVBoxLayout, QSizePolicy, QFormLayout, \
@@ -8,6 +7,7 @@ from PyQt5.QtWidgets import QWidget, QPushButton, QLineEdit, QVBoxLayout, QSizeP
 
 import ai
 import resources.qrc as qrc_resources
+from data_set import unscale, unvectorize
 from ui.test.dataset.img_viewer import ImageViewer
 
 # To save from imports optimization by IDEs
@@ -179,9 +179,9 @@ class DatasetTestWidget(QWidget):
             return
         ya = self._ai_model.feed(x)
 
-        image = x * 255
-        actual_digit = np.argmax(ya)
-        expected_digit = np.argmax(ye)
+        image = unscale(x)
+        actual_digit = unvectorize(ya)
+        expected_digit = unvectorize(ye)
         self._test_info.update(image, actual_digit, expected_digit)
         self._display_info()
 

@@ -4,6 +4,7 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
+from data_set import train_x
 from distribution_viewer.distributions import LayerParams, calc_distributions
 from distribution_viewer.distributions_app import DistributionViewerApp
 from functions import FormulaFunction, get_relu_inv_approx_func, sigmoid_inv, sigmoid_der, get_relu_der_approx_func, \
@@ -60,7 +61,7 @@ def get_distribution_function(func: Distribution) -> FormulaFunction:
 def run_distribution_viewer():
     cfg = app_ini.cfg.ai
     domain = np.linspace(-10, +10, 1000)
-    train_data = np.array(tf.keras.datasets.mnist.load_data()[0][0]).flatten() / 255
+    train_data = train_x.flatten()
     layer_params = get_layer_params(cfg)
     with TimeLog('Distributions calculation') as _:
         layer_distributions = calc_distributions(domain, train_data, layer_params)

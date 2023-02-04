@@ -1,18 +1,17 @@
-import random
 import sys
 
 import numpy as np
-import tensorflow as tf
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
 import ai
 import resources.qrc as qrc_resources
+from data_set import train_x, train_y, test_x, test_y
 from resources import app_ini
 from resources.app_ini import AiCfg, Distribution, DistributionType, DistributionParam
-from trainer import AiTrainer, random_extended_chunked_list
-from utils.iter_utils import is_iterable
+from trainer import AiTrainer
+from utils.iter_utils import random_extended_chunked_list
 from utils.zip_utils import zip2, zip3
 
 # To save from imports optimization by IDEs
@@ -41,38 +40,11 @@ class LearningRate:
             return val
 
 
-def digit_to_yv(d):
-    if not 0 <= d <= 9:
-        raise ValueError('Expected digit between 0 and 9')
-    y = np.zeros(shape=10)
-    y[d] = 1
-    return y
-
-
-def digit_to_yv_vec(dm):
-    return np.array([
-        digit_to_yv_vec(d) if is_iterable(d) else digit_to_yv(d)
-        for d in dm
-    ])
-
-
-def normalize_image(img: np.ndarray):
-    return img / 255
-
-
-def load_train_and_test_data(chunk_size, chunk_count):
-    (train_x, train_y), (test_x, test_y) = tf.keras.datasets.mnist.load_data()
-
-    train_x = normalize_image(train_x)
-    train_y = digit_to_yv_vec(train_y)
-    test_x = normalize_image(test_x)
-    test_y = digit_to_yv_vec(test_y)
-
-    train_data_set = list(zip2(train_x, train_y))
+def prepare_data(chunk_size, chunk_count):
+    train_data = list(zip2(train_x, train_y))
     test_data = list(zip2(test_x, test_y))
-    train_data = random_extended_chunked_list(train_data_set, chunk_size, chunk_count)
-    random.shuffle(test_data)
-
+    train_data = random_extended_chunked_list(train_data, chunk_size, chunk_count)
+    np.random.shuffle(test_data)
     return train_data, test_data
 
 
@@ -113,7 +85,7 @@ def main():
     cfg = app_ini.cfg
 
     learning_rate = LearningRate(cfg.ai.learning_rate)
-    train_data, test_data = load_train_and_test_data(cfg.train.chunk_size, cfg.train.chunk_count)
+    train_data, test_data = prepare_data(cfg.train.chunk_size, cfg.train.chunk_count)
 
     activation_functions = tuple([activation_funcs[f] for f in cfg.ai.activation_functions])
 

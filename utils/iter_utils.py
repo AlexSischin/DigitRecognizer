@@ -1,3 +1,9 @@
+import random
+from typing import Generator, TypeVar
+
+T = TypeVar('T')
+
+
 class IncompleteLastChunk(Exception):
     pass
 
@@ -51,3 +57,26 @@ def is_iterable(val):
     except TypeError:
         return False
     return True
+
+
+def random_iterator(values: list[T]) -> Generator[T, None, None]:
+    values_copy = values.copy()
+    random.shuffle(values_copy)
+    yield from values_copy
+
+
+def random_extended_chunked_list(values: list[T], chunk_size: int, chunk_count: int) -> list[list[T]]:
+    result_list = []
+    it = iter([])
+    while len(result_list) < chunk_count:
+        chunk = []
+        while len(chunk) < chunk_size:
+            try:
+                v = next(it)
+            except StopIteration:
+                it = random_iterator(values)
+                v = next(it)
+            chunk.append(v)
+        result_list.append(chunk)
+
+    return result_list
