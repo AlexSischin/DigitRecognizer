@@ -1,4 +1,3 @@
-import math
 from dataclasses import dataclass
 from numbers import Number
 from typing import Callable
@@ -23,7 +22,7 @@ class SigmoidFunc(ActivationFunction):
 
     @staticmethod
     def _of(x: float) -> float:
-        return 1 / (1 + pow(math.e, -x))
+        return 1 / (1 + np.exp(-x))
 
     @staticmethod
     def of_vec(xv: np.ndarray) -> np.ndarray:
@@ -135,7 +134,7 @@ class Ai:
         w_gradient = [w / n for w in w_gradient_sum]
         b_gradient = [b / n for b in b_gradient_sum]
         cost = square_mean_costs(costs)
-        gradient_len = math.sqrt(sum([np.sum(gc ** 2) for gc in w_gradient + b_gradient]))
+        gradient_len = np.sqrt(sum([np.sum(gc ** 2) for gc in w_gradient + b_gradient]))
         if gradient_len != 0:
             learning_rate = self._get_learning_rate(cost, gradient_len)
             self._patch(w_gradient, b_gradient, learning_rate)
