@@ -26,7 +26,7 @@ class SigmoidFunc(ActivationFunction):
 
     @staticmethod
     def of_vec(xv: np.ndarray) -> np.ndarray:
-        return np.vectorize(SigmoidFunc._of)(xv)
+        return 1 / (1 + np.exp(-xv))
 
     @staticmethod
     def der_of(x: np.ndarray) -> np.ndarray:
@@ -42,11 +42,11 @@ class ReLuFunc(ActivationFunction):
 
     @staticmethod
     def of_vec(xv: np.ndarray) -> np.ndarray:
-        return np.vectorize(ReLuFunc._of)(xv)
+        return (xv > 0).astype(float) * xv
 
     @staticmethod
     def der_of(x: np.ndarray) -> np.ndarray:
-        return (x > 0).astype(float) * x
+        return (x > 0).astype(float)
 
 
 def validate_brain(weights: tuple[np.ndarray], biases: tuple[np.ndarray]):
