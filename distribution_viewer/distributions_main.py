@@ -1,5 +1,4 @@
 import numpy as np
-import tensorflow as tf
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
@@ -60,7 +59,7 @@ def get_distribution_function(func: Distribution) -> FormulaFunction:
 
 def run_distribution_viewer():
     cfg = app_ini.cfg.ai
-    domain = np.linspace(-10, +10, 1000)
+    domain = np.linspace(-5, +5, 1000)
     train_data = train_x.flatten()
     layer_params = get_layer_params(cfg)
     with TimeLog('Distributions calculation') as _:
